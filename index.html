@@ -227,6 +227,7 @@ canvas{width:100%;display:block}
       <div class="card" style="flex:1"><div class="label">Cash</div><div class="bignum" style="font-size:22px" id="pfCash"></div></div>
       <div class="card" style="flex:1"><div class="label">Invested</div><div class="bignum" style="font-size:22px" id="pfInv"></div></div>
     </div>
+    <div id="streakBanner"></div>
     <div id="ordersWrap"></div>
     <div class="label" style="margin:14px 0 10px 4px">Holdings</div>
     <div id="holdList"></div>
@@ -422,6 +423,13 @@ let localReadyResolve;const localReadyPromise=new Promise(r=>localReadyResolve=r
 function cloudSyncBox(){
   if(!sb)return`<div style="font-size:12px;color:var(--gray-4)">Cloud sync isn't available right now.</div>`;
   if(cloudUser)return`<div style="font-size:13px;margin-bottom:10px">Signed in as <b>${esc(cloudUser.email)}</b> — this profile syncs across your devices.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;flex:1;padding-right:10px">Show me on the public leaderboard<br><span style="font-size:11px;color:var(--gray-4)">Just your name and return % — never your email</span></div>
+      <div class="seg" style="margin:0;width:90px">
+        <button class="${S.leaderboardOptIn?"":"on"}" onclick="setLeaderboardOptIn(false)">Off</button>
+        <button class="${S.leaderboardOptIn?"on":""}" onclick="setLeaderboardOptIn(true)">On</button>
+      </div>
+    </div>
     <button class="cta sell" style="padding:11px" onclick="cloudSignOut()">Sign out</button>`;
   return`<div style="font-size:12px;color:var(--gray-4);margin-bottom:8px;line-height:1.5">Sign in with a magic link to back this profile up and pick it up on another device — no password needed.</div>
     <input class="keyinput" id="cloudEmail" placeholder="you@email.com" type="email">
@@ -443,9 +451,15 @@ async function cloudSignOut(){
   toast("Signed out of cloud sync");
   if($("cloudSyncSection"))openSettings();
 }
+function setLeaderboardOptIn(on){
+  S.leaderboardOptIn=on;scheduleSave();openSettings();
+  toast(on?"You're on the public leaderboard 🏆":"Removed from the public leaderboard");
+}
 async function pushCloud(){
   if(!sb||!cloudUser||!S)return;
-  try{await sb.from("profiles").upsert({id:cloudUser.id,display_name:profiles.active||"Trader",state:S})}catch(e){}
+  const v=youValue(),returnPct=S.start?(v-S.start)/S.start*100:0;
+  try{await sb.from("profiles").upsert({id:cloudUser.id,display_name:profiles.active||"Trader",state:S,
+    leaderboard_opt_in:!!S.leaderboardOptIn,leaderboard_return_pct:returnPct,leaderboard_value:v})}catch(e){}
 }
 async function reconcileCloud(){
   if(!sb||!cloudUser)return;
@@ -489,7 +503,7 @@ function defaultState(bal){return{
   start:bal,cash:bal,youBase:bal,holdings:{},trades:[],equity:[[Date.now(),bal]],
   bots:{crypto:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0},
         stock:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0}},
-  orders:[],reserved:0,ach:{},custom:[],created:Date.now()
+  orders:[],reserved:0,ach:{},custom:[],created:Date.now(),streak:{count:0,lastDay:null},leaderboardOptIn:false
 }}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,800)}
 function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S);if(sb&&cloudUser)pushCloud()}
@@ -664,6 +678,8 @@ function drawSheet(){
      <button class="${orderType==="limit"?"on":""}" onclick="orderType='limit';drawSheet()">${sheetSide==="buy"?"Limit":"Limit (take profit)"}</button>
      ${sheetSide==="sell"?`<button class="${orderType==="stop"?"on":""}" onclick="orderType='stop';drawSheet()">Stop-loss</button>`:""}
    </div>
+   <button onclick="openGlossary('${orderType==="market"?"Market order":orderType==="limit"?"Limit order":"Stop-loss"}')"
+     style="display:block;margin:0 0 10px;font-size:12px;color:var(--gray-4);text-decoration:underline">What does this mean? ⓘ</button>
    ${orderType!=="market"?`<div style="display:flex;align-items:center;gap:8px;background:var(--gray-1);border-radius:12px;padding:11px 14px;margin-bottom:4px">
      <span style="font-size:12px;font-weight:600;color:var(--gray-4);flex:1">${orderType==="limit"?(sheetSide==="buy"?"Buy when price drops to":"Sell when price rises to"):"Sell if price falls to"}</span>
      <span style="font-family:var(--mono);font-weight:700">$</span>
@@ -712,7 +728,7 @@ function execute(){
   }
   S.trades.unshift({t:Date.now(),side:sheetSide,id:a.id,qty,price:p,val:v,who:"you"});
   if(S.trades.length>300)S.trades.pop();
-  unlock("first_trade");
+  unlock("first_trade");bumpStreak();
   if(sheetSide==="buy"){
     if(a.cat==="meme")unlock("meme_lord");
     if(a.cat==="ca")unlock("oh_canada");
@@ -808,6 +824,11 @@ function renderPortfolio(){
   plEl.className="subnum "+(pl>=0?"pos":"neg");
   $("pfCash").textContent=fmt(S.cash);$("pfInv").textContent=fmt(inv);
   $("pfDay").textContent=Object.keys(S.holdings).length+" positions";
+  $("streakBanner").innerHTML=S.streak&&S.streak.count>0?
+    `<div class="card" style="display:flex;align-items:center;gap:10px;padding:14px 16px">
+       <span style="font-size:24px">🔥</span>
+       <div><div style="font-weight:700;font-size:15px">${S.streak.count}-day streak</div>
+       <div style="font-size:12px;color:var(--gray-4)">Trade today to keep it going</div></div></div>`:"";
   $("ordersWrap").innerHTML=S.orders&&S.orders.length?`<div class="label" style="margin:14px 0 10px 4px">Open orders</div>`+
     S.orders.map(o=>`<div class="row" style="cursor:default;padding:11px 16px">
       <div class="badge" style="width:36px;height:36px;font-size:10px">${o.id.slice(0,4)}</div>
@@ -994,6 +1015,8 @@ function renderBotSection(k){
      ${Object.entries(BOT_STRATS[k]).map(([sk,s])=>`
        <div class="strat ${sk===botPick[k]?"on":""}" onclick="botPick['${k}']='${sk}';renderBot()">
          <div class="dot"></div><div><b>${s.ic} ${s.name}</b><p>${s.desc}</p></div></div>`).join("")}
+     <button onclick="openGlossary('Dollar-cost averaging')"
+       style="display:block;margin:2px 0 12px;font-size:12px;color:var(--gray-4);text-decoration:underline">Not sure what these mean? ⓘ</button>
      <div class="budget-box">
        <div class="label" style="margin-bottom:6px">Budget</div>
        <div style="display:flex;align-items:center;gap:6px">
@@ -1126,12 +1149,27 @@ const ACH=[
  ["bot_boss","🤖","Bot Boss","Activated a trading bot"],
  ["order_up","⏳","Order Up","Had a limit or stop order fill"],
  ["explorer","➕","Explorer","Added a custom ticker"],
- ["whale","🐋","Whale","Grew your account +25%"]];
+ ["whale","🐋","Whale","Grew your account +25%"],
+ ["streak_3","🔥","On a Roll","Traded 3 days in a row"],
+ ["streak_7","🔥","Week Warrior","Traded 7 days in a row"],
+ ["streak_30","🔥","Unstoppable","Traded 30 days in a row"]];
 function unlock(id){
   if(!S||!S.ach||S.ach[id])return;
   S.ach[id]=Date.now();scheduleSave();
   const a=ACH.find(x=>x[0]===id);
   if(a)setTimeout(()=>toast(`🏅 Badge earned: ${a[1]} ${a[2]}`),400);
+}
+function bumpStreak(){
+  if(!S)return;
+  const today=new Date().toDateString();
+  if(S.streak.lastDay===today)return;
+  const y=new Date();y.setDate(y.getDate()-1);
+  S.streak.count=S.streak.lastDay===y.toDateString()?S.streak.count+1:1;
+  S.streak.lastDay=today;
+  scheduleSave();
+  if(S.streak.count===3)unlock("streak_3");
+  if(S.streak.count===7)unlock("streak_7");
+  if(S.streak.count===30)unlock("streak_30");
 }
 const GLOSSARY=[
  ["Market order","Buys or sells immediately at the current price. Fast, but you take whatever price the market gives you."],
@@ -1148,10 +1186,20 @@ const GLOSSARY=[
  ["Market hours","NYSE trades 9:30 AM–4 PM ET, weekdays only. Crypto never closes."],
  ["Bull / bear","A bull market rises, a bear market falls. Bulls attack upward, bears swipe down."],
  ["Slippage & fees","In real trading, brokers take fees and big orders move prices. Practice apps are frictionless — real life isn't."]];
-function openGlossary(){
+function glossId(t){return "gloss-"+t.replace(/[^a-z0-9]/gi,"")}
+function openGlossary(highlight){
   $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:10px">📖 Trading glossary</h2>`+
-    GLOSSARY.map(([t,d])=>`<div class="log-item"><b>${t}</b><div class="why" style="margin-top:3px">${d}</div></div>`).join("");
+    GLOSSARY.map(([t,d])=>`<div class="log-item" id="${glossId(t)}"><b>${t}</b><div class="why" style="margin-top:3px">${d}</div></div>`).join("");
   $("overlay").classList.add("show");$("sheet").classList.add("show");
+  if(highlight){
+    setTimeout(()=>{
+      const el=document.getElementById(glossId(highlight));
+      if(!el)return;
+      el.scrollIntoView({block:"center"});
+      el.style.background="var(--gray-1)";el.style.borderRadius="12px";el.style.padding="8px 10px";
+      setTimeout(()=>{el.style.background="";el.style.padding=""},2200);
+    },350);
+  }
 }
 
 /* ================= LIMIT & STOP ORDERS ================= */
@@ -1189,7 +1237,7 @@ function checkOrders(){
       const h=S.holdings[o.id]||(S.holdings[o.id]={qty:0,cost:0});
       h.qty+=qty;h.cost+=o.val;
       S.trades.unshift({t:Date.now(),side:"buy",id:o.id,qty,price:fill,val:o.val,who:"you",note:"limit"});
-      filled.push(o.o);unlock("order_up");
+      filled.push(o.o);unlock("order_up");bumpStreak();
       toast(`⏳ Limit filled: bought ${o.id} @ ${fmt(fill)}`);
     }else if(o.side==="sell"&&((o.type==="limit"&&p>=o.target)||(o.type==="stop"&&p<=o.target))){
       const h=S.holdings[o.id];
@@ -1198,7 +1246,7 @@ function checkOrders(){
       const portion=qty/h.qty;h.cost-=h.cost*portion;h.qty-=qty;S.cash+=val;
       if(h.qty<1e-9)delete S.holdings[o.id];
       S.trades.unshift({t:Date.now(),side:"sell",id:o.id,qty,price:fill,val,who:"you",note:o.type});
-      filled.push(o.o);unlock("order_up");
+      filled.push(o.o);unlock("order_up");bumpStreak();
       toast(`${o.type==="stop"?"🛑 Stop-loss":"⏳ Limit"} filled: sold ${o.id} @ ${fmt(fill)}`);
     }
   });
@@ -1306,6 +1354,8 @@ function migrateState(){
   if(!S.custom)S.custom=[];
   if(!S.orders)S.orders=[];if(S.reserved===undefined)S.reserved=0;if(!S.ach)S.ach={};
   if(S.email===undefined)S.email="";if(!S.level)S.level="some";
+  if(!S.streak)S.streak={count:0,lastDay:null};
+  if(S.leaderboardOptIn===undefined)S.leaderboardOptIn=false;
   S.custom.forEach(a=>{if(!ASSETS.some(x=>x.id===a.id))registerAsset(a)});
 }
 function startAccount(){
@@ -1352,7 +1402,19 @@ function profileValue(st){
     v+=b.cash||0;for(const id in (b.holdings||{}))v+=b.holdings[id].qty*px(id)});
   return v;
 }
+let lbTab="device";
+function setLbTab(t){lbTab=t;openLeaderboard()}
 async function openLeaderboard(){
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🏆 Leaderboard</h2>
+   <div class="seg" style="margin:10px 0 4px">
+     <button class="${lbTab==="device"?"on":""}" onclick="setLbTab('device')">This device</button>
+     <button class="${lbTab==="global"?"on":""}" onclick="setLbTab('global')">Everyone</button>
+   </div>
+   <div id="lbBody"><div class="empty" style="padding:18px">Loading…</div></div>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+  if(lbTab==="device")renderDeviceLeaderboard();else renderGlobalLeaderboard();
+}
+async function renderDeviceLeaderboard(){
   const rows=[];
   for(const name of profiles.list){
     const st=name===profiles.active?S:await store.get("ppt-state:"+name);
@@ -1362,15 +1424,30 @@ async function openLeaderboard(){
   }
   rows.sort((a,b)=>b.r-a.r);
   const medals=["🥇","🥈","🥉"];
-  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🏆 Leaderboard</h2>
-   <p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Ranked by all-time return. Everyone on this device competes.</p>
+  if(!$("lbBody"))return;
+  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Ranked by all-time return. Everyone on this device competes.</p>
    ${rows.map((r,i)=>`<div class="row" style="cursor:default;${r.me?"border-color:var(--ink)":""}">
      <div style="font-size:20px;width:32px;text-align:center">${medals[i]||(i+1)}</div>
      <div class="row-mid"><div class="row-name">${esc(r.name)}${r.me?" (you)":""}</div>
        <div class="row-sub">${fmt(r.v)} · 🏅 ${r.badges}</div></div>
      <div class="row-right"><div class="row-chg ${r.r>=0?"pos":"neg"}" style="font-size:15px">${r.r>=0?"+":""}${r.r.toFixed(2)}%</div></div></div>`).join("")}
    ${rows.length<2?`<div class="empty" style="padding:18px">Add more profiles in ⚙ Settings to start a competition — great for challenging friends or family on one phone.</div>`:""}`;
-  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+async function renderGlobalLeaderboard(){
+  if(!$("lbBody"))return;
+  if(!sb){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Cloud sync isn't available right now.</div>`;return}
+  let data=null;
+  try{const r=await sb.from("leaderboard_public").select("*").order("leaderboard_return_pct",{ascending:false}).limit(50);data=r.data}catch(e){}
+  if(!$("lbBody"))return;
+  if(!data){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Couldn't load the global leaderboard right now.</div>`;return}
+  const medals=["🥇","🥈","🥉"];
+  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Real traders who've opted in, ranked by all-time return.</p>
+   ${data.length?data.map((r,i)=>{const me=cloudUser&&r.id===cloudUser.id;
+     return`<div class="row" style="cursor:default;${me?"border-color:var(--ink)":""}">
+       <div style="font-size:20px;width:32px;text-align:center">${medals[i]||(i+1)}</div>
+       <div class="row-mid"><div class="row-name">${esc(r.display_name)}${me?" (you)":""}</div></div>
+       <div class="row-right"><div class="row-chg ${(r.leaderboard_return_pct||0)>=0?"pos":"neg"}" style="font-size:15px">${(r.leaderboard_return_pct||0)>=0?"+":""}${(r.leaderboard_return_pct||0).toFixed(2)}%</div></div></div>`}).join("")
+     :`<div class="empty" style="padding:18px">No one's opted in yet — be the first! Turn it on in ⚙ Settings → Cloud Sync.</div>`}`;
 }
 async function init(){
   buildChips();
