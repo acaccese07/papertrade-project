@@ -60,3 +60,33 @@ create or replace view public.leaderboard_public as
   limit 100;
 
 grant select on public.leaderboard_public to anon, authenticated;
+
+-- ---------- 24/7 bot execution ----------
+-- Schedules supabase/functions/bot-tick to run every 2 minutes via pg_cron,
+-- so bots keep trading for signed-in accounts even with the app fully
+-- closed. The function itself decides who has an active bot; this just
+-- wakes it up on a schedule. The bearer token below is the public
+-- anon/publishable key (safe to embed, same one already in index.html) --
+-- it only needs to satisfy the function's own gateway auth check, since the
+-- function internally uses the service-role key for actual database access.
+
+create extension if not exists pg_cron with schema extensions;
+create extension if not exists pg_net with schema extensions;
+
+do $$
+begin
+  perform cron.unschedule('bot-tick');
+exception when others then null;
+end $$;
+
+select cron.schedule(
+  'bot-tick',
+  '*/2 * * * *',
+  $$
+  select net.http_post(
+    url:='https://iskyoiimykxqtygqxwwb.supabase.co/functions/v1/bot-tick',
+    headers:='{"Content-Type":"application/json","Authorization":"Bearer sb_publishable_KXQRhXlM058xNHP1G2YFNw_s7VC-Lr0"}'::jsonb,
+    body:='{}'::jsonb
+  );
+  $$
+);

@@ -18,6 +18,7 @@ const CORS = {
 // for the same symbol within the same few seconds.
 const cache = new Map<string, { at: number; body: unknown }>();
 const TTL_MS = 5000;
+const LOGO_TTL_MS = 24 * 60 * 60 * 1000; // logos don't change; cache a full day
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -36,26 +37,30 @@ Deno.serve(async (req: Request) => {
     // ignore -- validated below
   }
   const { type, q } = payload;
-  if (!q || (type !== "quote" && type !== "search")) {
-    return new Response(JSON.stringify({ error: "expected {type:'quote'|'search', q:'SYMBOL'}" }), {
+  if (!q || (type !== "quote" && type !== "search" && type !== "logo")) {
+    return new Response(JSON.stringify({ error: "expected {type:'quote'|'search'|'logo', q:'SYMBOL'}" }), {
       status: 400,
       headers: { ...CORS, "content-type": "application/json" },
     });
   }
 
+  const ttl = type === "logo" ? LOGO_TTL_MS : TTL_MS;
   const cacheKey = `${type}:${q}`;
   const hit = cache.get(cacheKey);
-  if (hit && Date.now() - hit.at < TTL_MS) {
+  if (hit && Date.now() - hit.at < ttl) {
     return new Response(JSON.stringify(hit.body), { headers: { ...CORS, "content-type": "application/json" } });
   }
 
   const upstream = type === "quote"
     ? `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(q)}&token=${FINNHUB_KEY}`
-    : `https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${FINNHUB_KEY}`;
+    : type === "search"
+    ? `https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${FINNHUB_KEY}`
+    : `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(q)}&token=${FINNHUB_KEY}`;
 
   try {
     const r = await fetch(upstream);
-    const body = await r.json();
+    const raw = await r.json();
+    const body = type === "logo" ? { logo: raw?.logo || null } : raw;
     cache.set(cacheKey, { at: Date.now(), body });
     return new Response(JSON.stringify(body), { headers: { ...CORS, "content-type": "application/json" } });
   } catch (e) {

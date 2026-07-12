@@ -109,6 +109,10 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round}
 .tab.on{color:var(--ink)}
+#helpBtn{position:absolute;right:14px;bottom:calc(88px + env(safe-area-inset-bottom));
+  width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--paper);
+  font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:30}
 
 /* ---------- sheet ---------- */
 #overlay{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;
@@ -236,6 +240,12 @@ canvas{width:100%;display:block}
   <!-- BOT -->
   <div class="screen" id="scr-bot">
     <div class="hdr"><h1>Auto Bot</h1><span class="pill" id="botPill">OFF</span></div>
+    <div id="botCloudNote"></div>
+    <div class="seg" style="margin:0 0 14px">
+      <button id="botTabBtn-crypto" onclick="setBotTab('crypto')">Crypto</button>
+      <button id="botTabBtn-stock" onclick="setBotTab('stock')">Stock</button>
+      <button id="botTabBtn-both" onclick="setBotTab('both')">Both</button>
+    </div>
     <div id="botCompare"></div>
     <div id="bot-crypto"></div>
     <div id="bot-stock"></div>
@@ -259,6 +269,8 @@ canvas{width:100%;display:block}
     <button class="tab" data-t="activity" onclick="go('activity')">
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Activity</button>
   </div>
+
+  <button id="helpBtn" onclick="openHelpGuide()" aria-label="Help guide" title="Help guide">?</button>
 
   <div id="overlay" onclick="closeSheet()"></div>
   <div id="sheet"></div>
@@ -467,14 +479,21 @@ async function reconcileCloud(){
     const{data,error}=await sb.from("profiles").select("state,display_name").eq("id",cloudUser.id).maybeSingle();
     if(error)throw error;
     const hasCloudData=data&&data.state&&Object.keys(data.state).length;
-    if(hasCloudData&&S&&profiles.active){
+    const linkKey="ppt-cloud-linked:"+cloudUser.id;
+    const alreadyLinked=localStorage.getItem(linkKey)==="1";
+    if(hasCloudData&&S&&profiles.active&&!alreadyLinked){
+      // first time this device has seen this account -- ask once, explicitly
       const useCloud=confirm(`Found saved progress in the cloud for ${cloudUser.email}.\n\nOK = restore cloud data (replaces what's on this device)\nCancel = keep this device's data and upload it instead`);
       if(useCloud)adoptCloudState(data);else await pushCloud();
     }else if(hasCloudData){
+      // already linked (or a fresh device with no local data yet) -- cloud is
+      // authoritative from here on, since a 24/7 bot or another device may
+      // have moved it forward; pull silently instead of re-asking every time
       adoptCloudState(data);
     }else if(S){
       await pushCloud();
     }
+    localStorage.setItem(linkKey,"1");
   }catch(e){console.warn("cloud sync failed",e)}
 }
 function adoptCloudState(data){
@@ -540,6 +559,32 @@ async function pollCrypto(){
     feedLive.crypto=got;
   }catch(e){feedLive.crypto=false}
   updateFeedPill();onPrices();
+}
+/* ================= LOGOS ================= */
+const logos={};
+function badgeHTML(id,isCrypto,extraStyle){
+  extraStyle=extraStyle||"";
+  if(logos[id])return`<div class="badge ${isCrypto?"crypto":""}" style="${extraStyle}padding:0;overflow:hidden">
+    <img src="${logos[id]}" alt="" style="width:100%;height:100%;object-fit:contain"
+      onerror="this.remove();this.parentElement.textContent='${id.slice(0,4)}';this.parentElement.style.padding=''"></div>`;
+  return`<div class="badge ${isCrypto?"crypto":""}" style="${extraStyle}">${id.slice(0,4)}</div>`;
+}
+async function loadLogos(){
+  const cryptoIds=ASSETS.filter(a=>a.t==="crypto"&&a.gecko).map(a=>a.gecko);
+  if(cryptoIds.length)try{
+    const r=await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${cryptoIds.join(",")}`);
+    const d=await r.json();
+    if(Array.isArray(d))d.forEach(c=>{const a=ASSETS.find(x=>x.gecko===c.id);if(a&&c.image)logos[a.id]=c.image});
+  }catch(e){}
+  if(!sb)return;
+  const stocks=ASSETS.filter(a=>a.t==="stock");
+  await Promise.all(stocks.map(async a=>{
+    try{
+      const{data}=await sb.functions.invoke("stock-proxy",{body:{type:"logo",q:a.id}});
+      if(data&&data.logo)logos[a.id]=data.logo;
+    }catch(e){}
+  }));
+  renderMarkets();
 }
 let stockIdx=0;
 async function fetchQuote(symbol){
@@ -608,8 +653,8 @@ function rowHTML(a){
   const p=prices[a.id],c=chg24[a.id],h=S.holdings[a.id];
   const own=h&&h.qty>1e-9?`<div class="hold-qty">Own ${fmtQty(h.qty)} · ${fmt(h.qty*p)}</div>`:"";
   return `<div class="row" onclick="openTrade('${a.id}')">
-    <div class="badge ${a.t==="crypto"?"crypto":""}">${a.id.slice(0,4)}</div>
-    <div class="row-mid"><div class="row-name">${a.n}</div><div class="row-sub">${a.cat==="ca"?"🇨🇦 ":""}${a.t==="crypto"?"Crypto":a.cat==="ca"?"Canada · NYSE":"US stock"}</div>${own}</div>
+    ${badgeHTML(a.id,a.t==="crypto")}
+    <div class="row-mid"><div class="row-name">${a.n}</div><div class="row-sub">${a.id} · ${a.cat==="ca"?"🇨🇦 ":""}${a.t==="crypto"?"Crypto":a.cat==="ca"?"Canada · NYSE":"US stock"}</div>${own}</div>
     <div class="row-right"><div class="row-price" id="p-${a.id}">${fmt(p)}</div>
     <div class="row-chg ${c>=0?"pos":"neg"}">${c>=0?"▲":"▼"} ${Math.abs(c).toFixed(2)}%</div></div></div>`;
 }
@@ -659,7 +704,7 @@ function drawSheet(){
    <div id="histNote" style="text-align:center;font-size:10px;color:var(--gray-3)"></div>`;
   $("sheet").innerHTML=`<div class="grab"></div>
    <div style="display:flex;align-items:center;gap:12px">
-     <div class="badge ${a.t==="crypto"?"crypto":""}">${a.id.slice(0,4)}</div>
+     ${badgeHTML(a.id,a.t==="crypto")}
      <div style="flex:1"><div style="font-weight:700;font-size:17px">${a.n}</div>
        <div style="font-size:12px;color:var(--gray-4)">${a.id} · ${a.t==="crypto"?"Crypto":"Stock"}</div></div>
      <div style="text-align:right"><div style="font-family:var(--mono);font-weight:700;font-size:18px">${fmt(p)}</div>
@@ -831,7 +876,7 @@ function renderPortfolio(){
        <div style="font-size:12px;color:var(--gray-4)">Trade today to keep it going</div></div></div>`:"";
   $("ordersWrap").innerHTML=S.orders&&S.orders.length?`<div class="label" style="margin:14px 0 10px 4px">Open orders</div>`+
     S.orders.map(o=>`<div class="row" style="cursor:default;padding:11px 16px">
-      <div class="badge" style="width:36px;height:36px;font-size:10px">${o.id.slice(0,4)}</div>
+      ${badgeHTML(o.id,(ASSETS.find(x=>x.id===o.id)||{}).t==="crypto","width:36px;height:36px;font-size:10px")}
       <div class="row-mid"><div class="row-name" style="font-size:14px">${o.side==="buy"?"Buy":o.type==="stop"?"Stop-loss sell":"Limit sell"} ${o.id}</div>
         <div class="row-sub">${o.side==="buy"?fmt(o.val)+" when price ≤ "+fmt(o.target):(o.type==="stop"?"if price ≤ ":"when price ≥ ")+fmt(o.target)}</div></div>
       <button class="chip" style="padding:6px 12px" onclick="cancelOrder(${o.o})">Cancel</button></div>`).join(""):"";
@@ -841,9 +886,9 @@ function renderPortfolio(){
     const a=ASSETS.find(x=>x.id===id),h=S.holdings[id],p=prices[id];
     const pl=p*h.qty-h.cost,plp=h.cost?pl/h.cost*100:0;
     return `<div class="row" onclick="openTrade('${id}')">
-      <div class="badge ${a.t==="crypto"?"crypto":""}">${id.slice(0,4)}</div>
+      ${badgeHTML(id,a.t==="crypto")}
       <div class="row-mid"><div class="row-name">${a.n}</div>
-        <div class="row-sub">${fmtQty(h.qty)} · avg ${fmt(h.cost/h.qty)}</div></div>
+        <div class="row-sub">${id} · ${fmtQty(h.qty)} · avg ${fmt(h.cost/h.qty)}</div></div>
       <div class="row-right"><div class="row-price">${fmt(h.qty*p)}</div>
         <div class="row-chg ${pl>=0?"pos":"neg"}">${pl>=0?"+":""}${plp.toFixed(1)}%</div></div></div>`;
   }).join(""):`<div class="empty">No positions yet.<br>Head to Markets and make your first trade — that's what the fake money is for.</div>`;
@@ -879,7 +924,7 @@ function renderActivity(){
     const a=ASSETS.find(x=>x.id===tr.id),crypto=a&&a.t==="crypto",d=new Date(tr.t);
     const who=tr.who==="bot-crypto"?"🤖 Crypto Bot":tr.who==="bot-stock"?"🤖 Stock Bot":tr.who==="bot"?"🤖 Bot":"";
     html+=`<div class="row" style="cursor:default">
-      <div class="badge ${crypto?"crypto":""}">${tr.id.slice(0,4)}</div>
+      ${badgeHTML(tr.id,crypto)}
       <div class="row-mid">
         <div class="row-name"><span class="tag ${tr.side}">${tr.side.toUpperCase()}</span>${tr.id}${tr.note?` <span class="pill" style="font-size:9px;padding:2px 6px">${tr.note.toUpperCase()}</span>`:""}</div>
         <div class="row-sub">${fmtQty(tr.qty)} @ ${fmt(tr.price)}${who?" · "+who:""}</div>
@@ -986,10 +1031,20 @@ function emptyBot(){return{active:false,strategy:null,cash:0,start:0,holdings:{}
 function botValue(k){const b=S.bots[k];let v=b.cash;for(const id in b.holdings)v+=b.holdings[id].qty*prices[id];return v}
 function botsValue(){return botValue("crypto")+botValue("stock")}
 
+let botTab=localStorage.getItem("ppt-bot-tab")||"both";
+function setBotTab(t){botTab=t;localStorage.setItem("ppt-bot-tab",t);renderBot()}
 function renderBot(){
   const nActive=(S.bots.crypto.active?1:0)+(S.bots.stock.active?1:0);
   $("botPill").textContent=nActive?nActive+" RUNNING":"OFF";
   $("botPill").className=nActive?"pill live":"pill";
+  document.querySelectorAll("#scr-bot .seg button").forEach(b=>b.classList.remove("on"));
+  const tabBtn=$("botTabBtn-"+botTab);if(tabBtn)tabBtn.classList.add("on");
+  $("botCompare").style.display=botTab==="both"?"":"none";
+  $("bot-crypto").style.display=(botTab==="crypto"||botTab==="both")?"":"none";
+  $("bot-stock").style.display=(botTab==="stock"||botTab==="both")?"":"none";
+  $("botCloudNote").innerHTML=!nActive?"":cloudUser
+    ?`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-4);margin-bottom:10px">☁️ Running 24/7 in the cloud — keeps trading even with the app closed</div>`
+    :`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-4);margin-bottom:10px">⚠️ Only runs while this app is open — sign in under ⚙ Settings to keep it trading 24/7</div>`;
   // comparison card
   if(nActive){
     const yr=(youValue()-S.youBase)/S.youBase*100;
@@ -1045,7 +1100,7 @@ function renderBotSection(k){
        ${k==="stock"&&!open?`<div style="font-size:12px;color:#8E8E93;margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a">⏸ Market closed — holding positions. Trading resumes ${nextOpenText()}.</div>`:""}
      </div>
      ${holds.length?`<div class="label" style="margin:14px 0 8px 4px">Holdings</div>`+holds.map(id=>{const h=b.holdings[id],p=prices[id],hpl=p*h.qty-h.cost;
-       return `<div class="row" style="cursor:default;padding:11px 16px"><div class="badge ${k==="crypto"?"crypto":""}" style="width:36px;height:36px;font-size:10px">${id.slice(0,4)}</div>
+       return `<div class="row" style="cursor:default;padding:11px 16px">${badgeHTML(id,k==="crypto","width:36px;height:36px;font-size:10px")}
          <div class="row-mid"><div class="row-name" style="font-size:14px">${id}</div><div class="row-sub">${fmtQty(h.qty)} units</div></div>
          <div class="row-right"><div class="row-price" style="font-size:14px">${fmt(h.qty*p)}</div>
          <div class="row-chg ${hpl>=0?"pos":"neg"}">${hpl>=0?"+":""}${fmt(hpl).replace("$-","-$")}</div></div></div>`}).join(""):""}
@@ -1202,6 +1257,36 @@ function openGlossary(highlight){
   }
 }
 
+/* ================= HELP GUIDE ================= */
+function openHelpGuide(){
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🎓 New here? Start here.</h2>
+   <p style="font-size:13px;color:var(--gray-4);margin-bottom:16px;line-height:1.5">A quick, no-jargon rundown of what this app is and a couple of real-world basics that trip people up.</p>
+
+   <div class="log-item"><b>What is this, actually?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Practice investing with fake money and real, live prices. Nothing here is real — you can't lose real money and you can't withdraw real money. It's a safe place to learn what buying, selling, and watching a portfolio move actually feels like before you ever put real money anywhere.</div></div>
+
+   <div class="log-item"><b>Is the money real?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">No — it's fake. The <i>prices</i> are real (live stock and crypto markets), but your cash balance and every trade are entirely simulated.</div></div>
+
+   <div class="log-item"><b>What's the "bot" thing?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">An automated strategy that trades on your behalf using fake money, so you can watch different approaches (steady investing vs. chasing dips vs. chasing momentum) play out over time without doing anything yourself. It's a teaching tool, not a way to "beat the market" — treat its results as an example, not a guarantee.</div></div>
+
+   <button class="settings-row" style="width:100%;text-align:left" onclick="openGlossary()"><span>📖 Full trading glossary</span><b>›</b></button>
+
+   <div class="label" style="margin:18px 0 8px 4px">Canadian accounts, briefly</div>
+   <div class="log-item"><b>🍁 What's a TFSA?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">A Tax-Free Savings Account is a registered Canadian account where any growth and any withdrawal is completely tax-free — no matter how much your investments gain. You don't get a tax deduction for putting money in (unlike an RRSP), but you never pay tax on what it earns or when you take it out.</div></div>
+   <div class="log-item"><b>How much can I put in?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">The government gives every eligible Canadian resident new "contribution room" each year (recent years have been around $7,000, indexed to inflation) starting from age 18. Unused room carries forward forever — if you've never contributed, that room has been stacking up since you turned 18 or since 2009, whichever is later.</div></div>
+   <div class="log-item"><b>Withdrawals & over-contributing</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Money you withdraw gets added back to your room — but only starting <i>next</i> calendar year, not immediately. Re-depositing the same amount later in the same year you withdrew it is the single most common way people accidentally over-contribute, which the CRA penalizes at 1% per month on the excess.</div></div>
+   <div class="log-item"><b>Where do I check my actual limit?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Your personal room depends on your own contribution/withdrawal history, which I can't calculate for you. Log into <b>CRA My Account</b> (canada.ca) — it shows your exact current TFSA room.</div></div>
+
+   <div class="empty" style="padding:16px;margin-top:6px;line-height:1.6">This is general educational information, not personalized financial advice. For anything about your actual money, a real registered advisor or the CRA directly is the right place to ask.</div>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+
 /* ================= LIMIT & STOP ORDERS ================= */
 let orderType="market";
 function placeOrder(v){
@@ -1285,7 +1370,7 @@ async function searchTickers(){
   $("addResults").innerHTML=addResults.map((r,i)=>{
     const exists=ASSETS.some(a=>a.id===r.id);
     return `<div class="row" style="padding:12px 14px" onclick="pickCustom(${i})">
-      <div class="badge ${r.t==="crypto"?"crypto":""}" style="width:36px;height:36px;font-size:10px">${r.id.slice(0,4)}</div>
+      ${badgeHTML(r.id,r.t==="crypto","width:36px;height:36px;font-size:10px")}
       <div class="row-mid"><div class="row-name" style="font-size:14px">${esc(r.n)}</div>
         <div class="row-sub">${r.id} · ${r.t==="crypto"?"Crypto":"Stock"}</div></div>
       <div class="row-right" style="font-size:12px;font-weight:600;color:var(--gray-4)">${exists?"In list":"＋ Add"}</div></div>`;
@@ -1470,6 +1555,7 @@ function boot(){
   if(booted){refreshAll();return}
   booted=true;
   renderMarkets();renderTape();updateFeedPill();
+  loadLogos();
   pollCrypto();setInterval(pollCrypto,30000);
   pollStocks();setInterval(pollStocks,21000);
   setInterval(simTick,2500);

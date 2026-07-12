@@ -52,10 +52,25 @@ Stock quotes are proxied through a Supabase Edge Function
 
 Once deployed, stocks go live for every visitor automatically — no Settings
 field, no per-user setup. If the function isn't deployed yet, stocks just
-stay in SIM mode (same graceful fallback as before).
+stay in SIM mode (same graceful fallback as before). The same function also
+serves stock logos (`type:"logo"`); crypto logos come free from CoinGecko's
+`/coins/markets` response, no extra setup needed.
+
+### 24/7 bot execution
+Bots also run server-side on a schedule (`supabase/functions/bot-tick`,
+triggered every 2 minutes by pg_cron — see the bottom of `schema.sql`), so a
+signed-in user's active bots keep trading even with the app fully closed.
+This is a simplified port of the client's bot logic: "dip"/"momentum"
+strategies use 24h % change instead of the client's short-window moving
+average (the server has no persistent tick history to compute one from), and
+trades happen roughly once per 2-minute cron tick rather than each
+strategy's exact 20-45s cooldown. Deploy/update it the same way as
+stock-proxy: `supabase functions deploy bot-tick`. The cron schedule itself
+is set up by re-running `schema.sql` (idempotent, safe to re-run).
 
 ## Notes for whoever picks this up in Claude Code
 - Live crypto prices: CoinGecko public API, no key needed.
 - Live stock prices: proxied through the `stock-proxy` Supabase Edge Function above.
 - Data persists via `window.storage` (Claude artifact storage) with a `localStorage` fallback, plus optional Supabase cloud sync — check the `store` object and the "CLOUD SYNC" section near the top of the script.
+- Public leaderboard: opt-in, backed by the `leaderboard_public` view in `schema.sql` — exposes only display name + return %, never email or holdings.
 - Everything currently lives in one `<script>` tag in index.html; a good first task is splitting it into modules (prices, bots, orders, ui) behind a bundler, while keeping `node test.js` green throughout.
