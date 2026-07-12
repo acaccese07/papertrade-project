@@ -21,10 +21,16 @@
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are auto-injected by Supabase.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "npm:web-push@3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FINNHUB_KEY = Deno.env.get("FINNHUB_KEY") ?? "";
+const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails("mailto:admin@papertrade.app", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
 const GECKO_ID: Record<string, string> = {
   BTC: "bitcoin", ETH: "ethereum", SOL: "solana", XRP: "ripple", ADA: "cardano",
@@ -197,7 +203,59 @@ Deno.serve(async (_req) => {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, accounts: (rows ?? []).length, processed }), {
+  const alertsFired = await checkPriceAlerts(admin, cryptoPrices, stockPrices, isOpen);
+
+  return new Response(JSON.stringify({ ok: true, accounts: (rows ?? []).length, processed, alertsFired }), {
     headers: { "content-type": "application/json" },
   });
 });
+
+async function checkPriceAlerts(
+  admin: ReturnType<typeof createClient>,
+  cryptoPrices: Record<string, Quote>,
+  stockPrices: Record<string, Quote>,
+  isOpen: boolean,
+): Promise<number> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return 0;
+  const { data: alerts } = await admin.from("price_alerts").select("*").eq("active", true);
+  if (!alerts || !alerts.length) return 0;
+
+  // fetch prices for any alerted assets not already covered by the bot pools
+  const missingCrypto = [...new Set(alerts.filter((al: any) => al.asset_type === "crypto" && !cryptoPrices[al.asset_id]).map((al: any) => al.asset_id))];
+  const missingStock = [...new Set(alerts.filter((al: any) => al.asset_type === "stock" && !stockPrices[al.asset_id]).map((al: any) => al.asset_id))];
+  const [extraCrypto, extraStock] = await Promise.all([
+    missingCrypto.length ? fetchCryptoPrices(missingCrypto as string[]) : Promise.resolve({}),
+    isOpen && missingStock.length ? fetchStockPrices(missingStock as string[]) : Promise.resolve({}),
+  ]);
+  const allCrypto = { ...cryptoPrices, ...extraCrypto };
+  const allStock = { ...stockPrices, ...extraStock };
+
+  let fired = 0;
+  for (const al of alerts as any[]) {
+    const q = al.asset_type === "crypto" ? allCrypto[al.asset_id] : allStock[al.asset_id];
+    if (!q) continue;
+    const hit = al.direction === "above" ? q.price >= al.target : q.price <= al.target;
+    if (!hit) continue;
+
+    const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", al.user_id);
+    for (const sub of subs ?? []) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify({
+            title: `${al.asset_id} is ${al.direction} ${al.target}`,
+            body: `Now at $${q.price.toLocaleString()} — tap to open PaperTrade`,
+            url: "/",
+          }),
+        );
+      } catch (e: any) {
+        if (e?.statusCode === 404 || e?.statusCode === 410) {
+          await admin.from("push_subscriptions").delete().eq("id", sub.id);
+        }
+      }
+    }
+    await admin.from("price_alerts").update({ active: false, triggered_at: new Date().toISOString() }).eq("id", al.id);
+    fired++;
+  }
+  return fired;
+}

@@ -690,10 +690,80 @@ function renderTape(){
 let sheetAsset=null,sheetSide="buy",sheetMode="cad"; // cad = dollar amount, qty = units
 function openTrade(id){
   sheetAsset=ASSETS.find(a=>a.id===id);sheetSide="buy";sheetMode="cad";orderType="market";curTF="live";
+  alertFormOpen=false;
   drawSheet();$("overlay").classList.add("show");$("sheet").classList.add("show");
 }
 function closeSheet(){$("overlay").classList.remove("show");$("sheet").classList.remove("show")}
 $("sheet").addEventListener("click",e=>{if(e.target.classList.contains("grab"))closeSheet()});
+
+/* ================= PRICE ALERTS (push notifications) ================= */
+const VAPID_PUBLIC_KEY="BHZdk0eyLlJ8nK7b3kEs81jfUYHXQhS6HNGNJnMYq_wi4FB7MYG0wn_q8HmV6WsMyIiN8DyF7lG0Qzhs_ZR8vNI";
+let alertFormOpen=false;
+function toggleAlertForm(){
+  if(!sb||!cloudUser){toast("Sign in under ⚙ Settings first — alerts need an account to fire in the background");return}
+  alertFormOpen=!alertFormOpen;drawSheet();
+}
+function alertFormHTML(a,p){
+  return`<div class="budget-box" style="margin-top:10px">
+    <div class="label" style="margin-bottom:8px">Notify me when ${a.id} goes...</div>
+    <div class="seg" style="margin:0 0 10px">
+      <button class="${alertDir==="below"?"on":""}" onclick="alertDir='below';drawSheet()">Below</button>
+      <button class="${alertDir==="above"?"on":""}" onclick="alertDir='above';drawSheet()">Above</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-family:var(--mono);font-size:20px;font-weight:700">$</span>
+      <input id="alertTarget" inputmode="decimal" value="${(p*(alertDir==="below"?0.95:1.05)).toPrecision(6)}"
+        style="font-family:var(--mono);font-size:20px;font-weight:700;flex:1;background:none">
+    </div>
+    <button class="cta" style="margin-top:12px;padding:12px" onclick="createAlert('${a.id}','${a.t}','${a.gecko||""}')">Set alert</button>
+  </div>`;
+}
+let alertDir="below";
+async function ensurePushSubscribed(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window))return null;
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted")return null;
+  const reg=await navigator.serviceWorker.register("sw.js");
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_PUBLIC_KEY});
+  const j=sub.toJSON();
+  try{await sb.from("push_subscriptions").upsert({user_id:cloudUser.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:"user_id,endpoint"})}catch(e){}
+  return sub;
+}
+async function createAlert(id,type,gecko){
+  const target=parseFloat($("alertTarget").value);
+  if(!target||target<=0)return toast("Enter a valid price");
+  const sub=await ensurePushSubscribed();
+  if(!sub)return toast("Enable notifications to use price alerts");
+  try{
+    await sb.from("price_alerts").insert({user_id:cloudUser.id,asset_id:id,asset_type:type,gecko_id:gecko||null,direction:alertDir,target});
+    toast(`🔔 We'll notify you when ${id} goes ${alertDir} ${fmt(target)}`);
+    alertFormOpen=false;drawSheet();
+  }catch(e){toast("Couldn't save that alert — try again")}
+}
+async function loadMyAlerts(){
+  if(!sb||!cloudUser)return[];
+  try{const{data}=await sb.from("price_alerts").select("*").eq("active",true).order("created_at",{ascending:false});return data||[]}catch(e){return[]}
+}
+async function cancelAlert(id){
+  if(!sb)return;
+  try{await sb.from("price_alerts").update({active:false}).eq("id",id)}catch(e){}
+  openMyAlerts();
+}
+async function openMyAlerts(){
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🔔 My Alerts</h2>
+   <p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Tap the bell on any asset's page to add one.</p>
+   <div id="alertsList"><div class="empty" style="padding:18px">Loading…</div></div>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+  const rows=await loadMyAlerts();
+  if(!$("alertsList"))return;
+  $("alertsList").innerHTML=rows.length?rows.map(r=>`<div class="row" style="cursor:default">
+      ${badgeHTML(r.asset_id,r.asset_type==="crypto")}
+      <div class="row-mid"><div class="row-name">${r.asset_id}</div>
+        <div class="row-sub">Notify when ${r.direction} ${fmt(r.target)}</div></div>
+      <button class="chip" style="padding:6px 12px" onclick="cancelAlert('${r.id}')">Cancel</button></div>`).join("")
+    :`<div class="empty" style="padding:18px">No active alerts yet.</div>`;
+}
 function drawSheet(){
   const a=sheetAsset,p=prices[a.id],h=S.holdings[a.id]||{qty:0,cost:0};
   const pl=h.qty>1e-9?(p*h.qty-h.cost):0;
@@ -707,9 +777,11 @@ function drawSheet(){
      ${badgeHTML(a.id,a.t==="crypto")}
      <div style="flex:1"><div style="font-weight:700;font-size:17px">${a.n}</div>
        <div style="font-size:12px;color:var(--gray-4)">${a.id} · ${a.t==="crypto"?"Crypto":"Stock"}</div></div>
+     <button class="iconbtn" style="width:40px;height:40px;font-size:17px" onclick="toggleAlertForm()" aria-label="Set a price alert" title="Set a price alert">🔔</button>
      <div style="text-align:right"><div style="font-family:var(--mono);font-weight:700;font-size:18px">${fmt(p)}</div>
        <div class="row-chg ${chg24[a.id]>=0?"pos":"neg"}">${chg24[a.id]>=0?"+":""}${chg24[a.id].toFixed(2)}% today</div></div>
    </div>
+   ${alertFormOpen?alertFormHTML(a,p):""}
    ${spark}
    ${h.qty>1e-9?`<div class="card" style="margin:10px 0 0;padding:12px 16px;display:flex;justify-content:space-between;font-size:13px">
      <span>You own <b style="font-family:var(--mono)">${fmtQty(h.qty)}</b></span>
@@ -964,6 +1036,7 @@ function openSettings(){
        <button class="chip" onclick="newProfile()">＋ New profile</button></div>
    </div>
    <button class="settings-row" style="width:100%;text-align:left" onclick="openGlossary()"><span>📖 Trading glossary</span><b>›</b></button>
+   ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openMyAlerts()"><span>🔔 My price alerts</span><b>›</b></button>`:""}
    <div class="settings-row" style="display:block">
      <div style="margin-bottom:8px"><b>🏅 Badges</b> <span style="color:var(--gray-4);font-size:12px">${Object.keys(S.ach||{}).length}/${ACH.length}</span></div>
      <div style="display:flex;flex-wrap:wrap;gap:6px">${ACH.map(([id,ic,name])=>
