@@ -35,9 +35,10 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 
 /* ---------- ticker tape ---------- */
 #tape{background:#0A0A0A;color:#FFFFFF;overflow:hidden;white-space:nowrap;
-  padding:7px 0 calc(7px);padding-top:calc(7px + env(safe-area-inset-top));
-  font-family:var(--mono);font-size:11px;flex-shrink:0}
+  padding:8px 0 calc(8px);padding-top:calc(8px + env(safe-area-inset-top));
+  font-family:var(--mono);font-size:13px;flex-shrink:0;cursor:pointer}
 #tapeTrack{display:inline-block;animation:tape 160s linear infinite}
+#tape.paused #tapeTrack{animation-play-state:paused}
 @keyframes tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .tape-item{margin:0 14px}
 .tape-item .u{color:#4ADE80}.tape-item .d{color:#FF6B61}
@@ -45,20 +46,20 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 /* ---------- header ---------- */
 .hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 0 10px}
 .hdr h1{font-size:28px;font-weight:800;letter-spacing:-.5px}
-.pill{font-family:var(--mono);font-size:10px;font-weight:600;padding:4px 9px;
+.pill{font-family:var(--mono);font-size:11px;font-weight:600;padding:5px 10px;
   border-radius:99px;border:1px solid var(--gray-2);color:var(--gray-4);background:var(--paper)}
 .pill.live{border-color:var(--up);color:var(--up)}
 .pill.live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;
   background:var(--up);margin-right:5px;animation:blink 1.6s infinite}
 @keyframes blink{50%{opacity:.25}}
-.iconbtn{width:36px;height:36px;border-radius:50%;background:var(--paper);
-  border:1px solid var(--gray-2);font-size:16px;display:flex;align-items:center;justify-content:center}
+.iconbtn{width:44px;height:44px;border-radius:50%;background:var(--paper);
+  border:1px solid var(--gray-2);font-size:18px;display:flex;align-items:center;justify-content:center}
 
 /* ---------- cards ---------- */
 .card{background:var(--paper);border-radius:var(--radius);padding:18px;margin-bottom:12px;
   border:1px solid var(--gray-2)}
 .card.dark{background:var(--ink);color:var(--paper);border:none}
-.label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--gray-4)}
+.label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--gray-4)}
 .card.dark .label{color:#8E8E93}
 .bignum{font-family:var(--mono);font-size:36px;font-weight:700;letter-spacing:-1px;margin:4px 0 2px}
 .subnum{font-family:var(--mono);font-size:13px;color:var(--gray-4)}
@@ -67,15 +68,15 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 /* ---------- chips ---------- */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex-shrink:0;padding:8px 15px;border-radius:99px;font-size:13px;font-weight:600;
+.chip{flex-shrink:0;padding:11px 16px;border-radius:99px;font-size:13px;font-weight:600;
   background:var(--paper);border:1px solid var(--gray-2);color:var(--gray-4)}
 .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 
 /* ---------- search ---------- */
 .search{display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--gray-2);
-  border-radius:12px;padding:10px 14px;margin-bottom:10px}
+  border-radius:12px;padding:13px 14px;margin-bottom:10px}
 .search input{flex:1;font-size:15px}
-.search input::placeholder{color:var(--gray-3)}
+.search input::placeholder{color:var(--gray-4)}
 
 /* ---------- asset rows ---------- */
 .row{display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--gray-2);
@@ -88,7 +89,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .badge.crypto{background:var(--paper);color:var(--ink);border:1.5px solid var(--ink)}
 .row-mid{flex:1;min-width:0}
 .row-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row-sub{font-size:12px;color:var(--gray-4);margin-top:1px}
+.row-sub{font-size:13px;color:var(--gray-4);margin-top:1px}
 .row-right{text-align:right}
 .row-price{font-family:var(--mono);font-size:15px;font-weight:600;border-radius:6px;padding:1px 4px;margin-right:-4px}
 .row-chg{font-family:var(--mono);font-size:12px;font-weight:600;margin-top:1px}
@@ -104,7 +105,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--gray-2);
   display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;
-  font-size:10px;font-weight:600;color:var(--gray-3);border-radius:12px}
+  font-size:11px;font-weight:600;color:var(--gray-3);border-radius:12px}
 .tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round}
 .tab.on{color:var(--ink)}
@@ -118,7 +119,9 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
   transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,.35,1);
   max-height:88dvh;overflow-y:auto}
 #sheet.show{transform:translateY(0)}
-.grab{width:38px;height:5px;border-radius:3px;background:var(--gray-2);margin:0 auto 14px}
+.grab{width:70px;height:34px;margin:0 auto 4px;cursor:pointer;display:flex;
+  align-items:center;justify-content:center}
+.grab::before{content:"";width:38px;height:5px;border-radius:3px;background:var(--gray-2)}
 .seg{display:flex;background:var(--gray-1);border-radius:12px;padding:3px;margin:14px 0}
 .seg button{flex:1;padding:9px;border-radius:10px;font-size:14px;font-weight:600;color:var(--gray-4)}
 .seg button.on{background:var(--ink);color:var(--paper)}
@@ -145,7 +148,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .ob-dot.on{background:var(--onboard-fg);width:20px;border-radius:4px}
 .ob-step{display:none;flex-direction:column;justify-content:center;flex:1;position:relative}
 .ob-step.on{display:flex}
-.ob-back{position:absolute;left:0;top:-6px;width:34px;height:34px;border-radius:50%;
+.ob-back{position:absolute;left:0;top:-6px;width:42px;height:42px;border-radius:50%;
   border:1.5px solid #333;color:var(--onboard-fg);font-size:20px;display:flex;
   align-items:center;justify-content:center}
 .level-opt{display:flex;align-items:center;gap:12px;width:100%;padding:16px 18px;border-radius:14px;
@@ -158,7 +161,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .bal-opt.on{background:var(--onboard-fg);color:var(--onboard-bg);border-color:var(--onboard-fg)}
 #customBal{width:100%;padding:16px;border-radius:16px;border:1.5px solid #333;text-align:center;
   font-family:var(--mono);font-size:18px;color:var(--onboard-fg);margin-bottom:22px;background:none}
-#customBal::placeholder{color:#555}
+#customBal::placeholder{color:#8E8E93}
 .cta.white{background:var(--onboard-fg);color:var(--onboard-bg)}
 
 /* ---------- bot ---------- */
@@ -191,7 +194,7 @@ canvas{width:100%;display:block}
 </head>
 <body>
 <div id="app">
-  <div id="tape"><div id="tapeTrack"></div></div>
+  <div id="tape" onclick="this.classList.toggle('paused')" title="Tap to pause"><div id="tapeTrack"></div></div>
 
   <!-- MARKETS -->
   <div class="screen active" id="scr-markets">
@@ -200,8 +203,8 @@ canvas{width:100%;display:block}
       <div style="display:flex;gap:8px;align-items:center">
         <span class="pill" id="mktPill">NYSE</span>
         <span class="pill" id="feedPill">SIM</span>
-        <button class="iconbtn" onclick="openAddSheet()" style="font-size:20px;font-weight:600">+</button>
-        <button class="iconbtn" onclick="openSettings()">&#9881;</button>
+        <button class="iconbtn" onclick="openAddSheet()" style="font-size:20px;font-weight:600" aria-label="Add a ticker" title="Add a ticker">+</button>
+        <button class="iconbtn" onclick="openSettings()" aria-label="Settings" title="Settings">&#9881;</button>
       </div>
     </div>
     <div class="search">&#128269;<input id="q" placeholder="Search stocks &amp; crypto" oninput="renderMarkets()"></div>
@@ -213,7 +216,7 @@ canvas{width:100%;display:block}
   <div class="screen" id="scr-portfolio">
     <div class="hdr"><h1>Portfolio</h1><div style="display:flex;gap:8px;align-items:center">
       <span class="pill" id="pfDay"></span>
-      <button class="iconbtn" onclick="openLeaderboard()">🏆</button></div></div>
+      <button class="iconbtn" onclick="openLeaderboard()" aria-label="Leaderboard" title="Leaderboard">🏆</button></div></div>
     <div class="card dark">
       <div class="label">Total value</div>
       <div class="bignum" id="pfTotal">$0</div>
@@ -274,7 +277,7 @@ canvas{width:100%;display:block}
     </div>
 
     <div class="ob-step" id="ob-2">
-      <button class="ob-back" onclick="obBack(2)">‹</button>
+      <button class="ob-back" onclick="obBack(2)" aria-label="Back" title="Back">‹</button>
       <h1>What's your trading experience?</h1>
       <p>So we can keep the glossary and tips at the right level for you.</p>
       <button class="level-opt" data-lv="new">🌱 <span>New to investing</span></button>
@@ -284,7 +287,7 @@ canvas{width:100%;display:block}
     </div>
 
     <div class="ob-step" id="ob-3">
-      <button class="ob-back" onclick="obBack(3)">‹</button>
+      <button class="ob-back" onclick="obBack(3)" aria-label="Back" title="Back">‹</button>
       <h1>Pick your starting balance.</h1>
       <p>Fake money, real practice. You can reset anytime.</p>
       <div class="bal-grid">
@@ -631,6 +634,7 @@ function openTrade(id){
   drawSheet();$("overlay").classList.add("show");$("sheet").classList.add("show");
 }
 function closeSheet(){$("overlay").classList.remove("show");$("sheet").classList.remove("show")}
+$("sheet").addEventListener("click",e=>{if(e.target.classList.contains("grab"))closeSheet()});
 function drawSheet(){
   const a=sheetAsset,p=prices[a.id],h=S.holdings[a.id]||{qty:0,cost:0};
   const pl=h.qty>1e-9?(p*h.qty-h.cost):0;
