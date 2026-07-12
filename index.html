@@ -1331,30 +1331,67 @@ function openGlossary(highlight){
 }
 
 /* ================= HELP GUIDE ================= */
+const HELP_TOPICS=[["help-start","Getting started"],["help-tfsa","🍁 TFSA"],["help-rrsp","🍁 RRSP"],["help-fhsa","🍁 FHSA"],["help-basics","Investing basics"]];
+function helpJump(id){
+  const el=document.getElementById(id);if(!el)return;
+  el.scrollIntoView({block:"start"});
+  el.style.background="var(--gray-1)";el.style.borderRadius="12px";el.style.padding="10px 12px";
+  setTimeout(()=>{el.style.background="";el.style.padding=""},2200);
+}
 function openHelpGuide(){
   $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🎓 New here? Start here.</h2>
-   <p style="font-size:13px;color:var(--gray-4);margin-bottom:16px;line-height:1.5">A quick, no-jargon rundown of what this app is and a couple of real-world basics that trip people up.</p>
+   <p style="font-size:13px;color:var(--gray-4);margin-bottom:10px;line-height:1.5">A quick, no-jargon rundown of what this app is, plus general education on a few real-world basics that trip people up.</p>
+   <div class="chips" style="padding:2px 0 14px">${HELP_TOPICS.map(([id,l])=>`<button class="chip" onclick="helpJump('${id}')">${l}</button>`).join("")}</div>
 
+   <div id="help-start">
    <div class="log-item"><b>What is this, actually?</b>
      <div class="why" style="margin-top:4px;line-height:1.6">Practice investing with fake money and real, live prices. Nothing here is real — you can't lose real money and you can't withdraw real money. It's a safe place to learn what buying, selling, and watching a portfolio move actually feels like before you ever put real money anywhere.</div></div>
-
    <div class="log-item"><b>Is the money real?</b>
      <div class="why" style="margin-top:4px;line-height:1.6">No — it's fake. The <i>prices</i> are real (live stock and crypto markets), but your cash balance and every trade are entirely simulated.</div></div>
-
    <div class="log-item"><b>What's the "bot" thing?</b>
      <div class="why" style="margin-top:4px;line-height:1.6">An automated strategy that trades on your behalf using fake money, so you can watch different approaches (steady investing vs. chasing dips vs. chasing momentum) play out over time without doing anything yourself. It's a teaching tool, not a way to "beat the market" — treat its results as an example, not a guarantee.</div></div>
-
    <button class="settings-row" style="width:100%;text-align:left" onclick="openGlossary()"><span>📖 Full trading glossary</span><b>›</b></button>
+   </div>
 
-   <div class="label" style="margin:18px 0 8px 4px">Canadian accounts, briefly</div>
-   <div class="log-item"><b>🍁 What's a TFSA?</b>
-     <div class="why" style="margin-top:4px;line-height:1.6">A Tax-Free Savings Account is a registered Canadian account where any growth and any withdrawal is completely tax-free — no matter how much your investments gain. You don't get a tax deduction for putting money in (unlike an RRSP), but you never pay tax on what it earns or when you take it out.</div></div>
+   <div class="label" style="margin:18px 0 8px 4px" id="help-tfsa">🍁 TFSA (Tax-Free Savings Account)</div>
+   <div class="log-item"><b>What is it?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">A registered Canadian account where any growth and any withdrawal is completely tax-free — no matter how much your investments gain. You don't get a tax deduction for putting money in (unlike an RRSP), but you never pay tax on what it earns or when you take it out.</div></div>
    <div class="log-item"><b>How much can I put in?</b>
      <div class="why" style="margin-top:4px;line-height:1.6">The government gives every eligible Canadian resident new "contribution room" each year (recent years have been around $7,000, indexed to inflation) starting from age 18. Unused room carries forward forever — if you've never contributed, that room has been stacking up since you turned 18 or since 2009, whichever is later.</div></div>
    <div class="log-item"><b>Withdrawals & over-contributing</b>
      <div class="why" style="margin-top:4px;line-height:1.6">Money you withdraw gets added back to your room — but only starting <i>next</i> calendar year, not immediately. Re-depositing the same amount later in the same year you withdrew it is the single most common way people accidentally over-contribute, which the CRA penalizes at 1% per month on the excess.</div></div>
    <div class="log-item"><b>Where do I check my actual limit?</b>
-     <div class="why" style="margin-top:4px;line-height:1.6">Your personal room depends on your own contribution/withdrawal history, which I can't calculate for you. Log into <b>CRA My Account</b> (canada.ca) — it shows your exact current TFSA room.</div></div>
+     <div class="why" style="margin-top:4px;line-height:1.6">Your personal room depends on your own contribution/withdrawal history, which nothing in this app can calculate for you. Log into <b>CRA My Account</b> (canada.ca) — it shows your exact current TFSA room.</div></div>
+
+   <div class="label" style="margin:18px 0 8px 4px" id="help-rrsp">🍁 RRSP (Registered Retirement Savings Plan)</div>
+   <div class="log-item"><b>What is it?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">The opposite trade-off from a TFSA: contributions are tax-deductible now (they reduce your taxable income the year you contribute), growth is tax-deferred, but withdrawals later are taxed as regular income. It's built around the idea that you'll be in a lower tax bracket in retirement than while working.</div></div>
+   <div class="log-item"><b>How much room do I get?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">18% of your previous year's earned income, up to an annual maximum that's indexed yearly, plus any unused room carried forward from prior years.</div></div>
+   <div class="log-item"><b>Withdrawing early costs more than you'd think</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Unlike a TFSA, an early RRSP withdrawal is taxed as income <i>and</i> you permanently lose that contribution room — it doesn't come back. Two exceptions let you withdraw tax-free if repaid over time: the Home Buyers' Plan (first home) and the Lifelong Learning Plan (education).</div></div>
+   <div class="log-item"><b>Where do I check my actual limit?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Your Notice of Assessment from your last tax return shows your exact RRSP deduction limit, and it's also in CRA My Account.</div></div>
+
+   <div class="label" style="margin:18px 0 8px 4px" id="help-fhsa">🍁 FHSA (First Home Savings Account)</div>
+   <div class="log-item"><b>What is it?</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">A newer registered account (since 2023) built for first-time home buyers, combining both other accounts' upsides: contributions are tax-deductible like an RRSP, <i>and</i> withdrawals for a qualifying home purchase are completely tax-free like a TFSA.</div></div>
+   <div class="log-item"><b>Limits & eligibility</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">$8,000/year contribution room up to a $40,000 lifetime cap, with unused annual room carrying forward. You need to be a first-time buyer — meaning you haven't owned a home you lived in during the current year or the previous four.</div></div>
+   <div class="log-item"><b>If you don't end up buying</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">The account has to close within 15 years of opening or by age 71. Funds not used for a qualifying home purchase can move into an RRSP without using up RRSP room, or be withdrawn (taxed as income).</div></div>
+
+   <div class="label" style="margin:18px 0 8px 4px" id="help-basics">Investing basics</div>
+   <div class="log-item"><b>Diversification</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Spreading money across different assets so one bad pick can't sink your whole portfolio — the same idea behind the "Diversified" badge in this app.</div></div>
+   <div class="log-item"><b>Time horizon & risk</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Money you need soon should generally take less risk than money you won't touch for decades — a crash is a lot easier to sit through if you don't need the cash next year.</div></div>
+   <div class="log-item"><b>Compound growth</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Returns earn returns on themselves over time, which is why starting early matters more than most people expect — a few extra years of growth can outweigh contributing more money later.</div></div>
+   <div class="log-item"><b>Fees quietly matter</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">A 1-2% annual fee sounds small but compounds against you every year — worth comparing before choosing where to actually invest for real.</div></div>
+   <div class="log-item"><b>The most common mistakes</b>
+     <div class="why" style="margin-top:4px;line-height:1.6">Panic-selling during a downturn, chasing whatever's hyped at the moment, and trading so often that fees and timing mistakes eat your returns. This app's bot strategies are a safe way to see what patient vs. reactive investing actually looks like over time.</div></div>
 
    <div class="empty" style="padding:16px;margin-top:6px;line-height:1.6">This is general educational information, not personalized financial advice. For anything about your actual money, a real registered advisor or the CRA directly is the right place to ask.</div>`;
   $("overlay").classList.add("show");$("sheet").classList.add("show");
