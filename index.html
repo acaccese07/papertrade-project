@@ -268,8 +268,9 @@ canvas{width:100%;display:block}
       <h1>Hey there 👋<br>Let's get you set up.</h1>
       <p>Practice trading with live markets and virtual money.<br>US &amp; Canadian stocks, plus crypto — zero risk.</p>
       <input id="pname" placeholder="Your name" maxlength="20" style="width:100%;padding:15px;border-radius:16px;border:1.5px solid #333;text-align:center;font-size:16px;font-weight:600;color:var(--onboard-fg);margin-bottom:10px;background:none">
-      <input id="pemail" type="email" placeholder="Email (optional)" maxlength="60" style="width:100%;padding:15px;border-radius:16px;border:1.5px solid #333;text-align:center;font-size:16px;font-weight:600;color:var(--onboard-fg);margin-bottom:14px;background:none">
-      <button class="cta white" onclick="obNext(1)">Continue</button>
+      <input id="pemail" type="email" placeholder="Email (optional)" maxlength="60" style="width:100%;padding:15px;border-radius:16px;border:1.5px solid #333;text-align:center;font-size:16px;font-weight:600;color:var(--onboard-fg);margin-bottom:8px;background:none">
+      <div style="font-size:11px;color:#8E8E93;margin-bottom:14px;line-height:1.5">We'll email you a magic link so your progress follows you to other devices. Totally optional — you can start trading either way.</div>
+      <button class="cta white" onclick="obStep1Continue()">Continue</button>
     </div>
 
     <div class="ob-step" id="ob-2">
@@ -485,7 +486,7 @@ function defaultState(bal){return{
   start:bal,cash:bal,youBase:bal,holdings:{},trades:[],equity:[[Date.now(),bal]],
   bots:{crypto:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0},
         stock:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0}},
-  orders:[],reserved:0,ach:{},custom:[],finnhubKey:"",created:Date.now()
+  orders:[],reserved:0,ach:{},custom:[],created:Date.now()
 }}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,800)}
 function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S);if(sb&&cloudUser)pushCloud()}
@@ -524,20 +525,23 @@ async function pollCrypto(){
   updateFeedPill();onPrices();
 }
 let stockIdx=0;
+async function fetchQuote(symbol){
+  if(!sb)return null;
+  try{
+    const{data,error}=await sb.functions.invoke("stock-proxy",{body:{type:"quote",q:symbol}});
+    if(error||!data)return null;
+    return data;
+  }catch(e){return null}
+}
 async function pollStocks(){
-  const key=S&&S.finnhubKey;
-  if(!key){feedLive.stock=false;updateFeedPill();return}
+  if(!sb){feedLive.stock=false;updateFeedPill();return}
   const stocks=ASSETS.filter(a=>a.t==="stock");
-  // rotate through in batches of 8 to stay well under free-tier limits
+  // rotate through in batches of 10 to stay well under free-tier limits
   const batch=[];for(let i=0;i<10;i++){batch.push(stocks[stockIdx%stocks.length]);stockIdx++}
   let got=false;
   await Promise.all(batch.map(async a=>{
-    try{
-      const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${a.id}&token=${key}`);
-      if(!r.ok)throw 0;
-      const d=await r.json();
-      if(d.c&&d.c>0){prices[a.id]=d.c;chg24[a.id]=d.dp||0;pushHist(a.id);got=true}
-    }catch(e){}
+    const d=await fetchQuote(a.id);
+    if(d&&d.c&&d.c>0){prices[a.id]=d.c;chg24[a.id]=d.dp||0;pushHist(a.id);got=true}
   }));
   if(got)feedLive.stock=true;
   updateFeedPill();onPrices();
@@ -869,10 +873,8 @@ function openSettings(){
   $("sheet").innerHTML=`<div class="grab"></div>
    <h2 style="font-size:20px;margin-bottom:6px">Settings</h2>
    <div class="settings-row" style="display:block;border:none">
-     <div><b>Live stock prices</b><div style="font-size:12px;color:var(--gray-4);margin-top:2px;line-height:1.5">
-       Crypto is live automatically. For live stocks, paste a free API key from finnhub.io (takes 1 minute to create).</div></div>
-     <input class="keyinput" id="fhKey" placeholder="Finnhub API key" value="${esc(S.finnhubKey||"")}">
-     <button class="cta" style="margin-top:10px;padding:13px" onclick="saveKey()">Save key</button>
+     <div><b>Live prices</b><div style="font-size:12px;color:var(--gray-4);margin-top:2px;line-height:1.5">
+       Crypto and stocks are both live automatically — no setup needed.</div></div>
    </div>
    <div class="settings-row" style="display:block">
      <div style="margin-bottom:8px"><b>🎨 Appearance</b></div>
@@ -902,8 +904,6 @@ function openSettings(){
    <button class="cta sell" style="margin-top:16px;border-color:var(--dn);color:var(--dn)" onclick="resetAll()">Reset account</button>`;
   $("overlay").classList.add("show");$("sheet").classList.add("show");
 }
-function saveKey(){S.finnhubKey=$("fhKey").value.trim();scheduleSave();closeSheet();
-  toast(S.finnhubKey?"Key saved — fetching live stocks":"Key removed");if(S.finnhubKey)pollStocks()}
 function getTheme(){return localStorage.getItem("ppt-theme")||"light"}
 function setTheme(t){localStorage.setItem("ppt-theme",t);document.documentElement.setAttribute("data-theme",t);openSettings()}
 function resetAll(){
@@ -1210,7 +1210,7 @@ function openAddSheet(){
   $("sheet").innerHTML=`<div class="grab"></div>
    <h2 style="font-size:20px;margin-bottom:4px">Add a ticker</h2>
    <p style="font-size:13px;color:var(--gray-4);line-height:1.5;margin-bottom:12px">
-     Search thousands of cryptos (built in) and any US-listed stock${S.finnhubKey?"":" — add your free Finnhub key in ⚙ Settings to unlock stock search"}.</p>
+     Search thousands of cryptos and any US-listed stock.</p>
    <div class="search" style="margin-bottom:8px">&#128269;<input id="addQ" placeholder="Name or symbol — e.g. Kaspa, LULU" onkeydown="if(event.key==='Enter')searchTickers()"></div>
    <button class="cta" style="padding:13px" onclick="searchTickers()">Search</button>
    <div id="addResults" style="margin-top:12px"></div>`;
@@ -1225,11 +1225,11 @@ async function searchTickers(){
   jobs.push(fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`)
     .then(r=>r.json()).then(d=>{(d.coins||[]).slice(0,6).forEach(c=>addResults.push(
       {id:c.symbol.toUpperCase(),n:c.name,t:"crypto",gecko:c.id}))}).catch(()=>{}));
-  if(S.finnhubKey)jobs.push(fetch(`https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${S.finnhubKey}`)
-    .then(r=>r.json()).then(d=>{(d.result||[]).filter(r=>r.type==="Common Stock"&&!r.symbol.includes(".")).slice(0,6)
+  if(sb)jobs.push(sb.functions.invoke("stock-proxy",{body:{type:"search",q}})
+    .then(({data})=>{((data&&data.result)||[]).filter(r=>r.type==="Common Stock"&&!r.symbol.includes(".")).slice(0,6)
       .forEach(r=>addResults.push({id:r.symbol,n:r.description,t:"stock"}))}).catch(()=>{}));
   await Promise.all(jobs);
-  if(!addResults.length){$("addResults").innerHTML=`<div class="empty" style="padding:16px">No results${S.finnhubKey?"":" — for stocks, add a Finnhub key in Settings first"}. Search needs internet access; if you're offline it can't reach the ticker directories.</div>`;return}
+  if(!addResults.length){$("addResults").innerHTML=`<div class="empty" style="padding:16px">No results. Search needs internet access; if you're offline it can't reach the ticker directories.</div>`;return}
   $("addResults").innerHTML=addResults.map((r,i)=>{
     const exists=ASSETS.some(a=>a.id===r.id);
     return `<div class="row" style="padding:12px 14px" onclick="pickCustom(${i})">
@@ -1249,8 +1249,8 @@ async function pickCustom(i){
       base=d[r.gecko]&&d[r.gecko].usd;
       if(base)chg24[r.id]=d[r.gecko].usd_24h_change||0;
     }else{
-      const d=await(await fetch(`https://finnhub.io/api/v1/quote?symbol=${r.id}&token=${S.finnhubKey}`)).json();
-      base=d.c;if(base)chg24[r.id]=d.dp||0;
+      const d=await fetchQuote(r.id);
+      base=d&&d.c;if(base)chg24[r.id]=d.dp||0;
     }
   }catch(e){}
   if(!base){toast("Couldn't fetch a price for "+r.id);return}
@@ -1282,6 +1282,11 @@ function showObStep(n){
 }
 function obNext(from){showObStep(from+1)}
 function obBack(from){showObStep(from-1)}
+function obStep1Continue(){
+  const email=($("pemail").value||"").trim();
+  if(email&&email.includes("@")){sendMagicLink(email);toast("Check your email to sync across devices 📬")}
+  showObStep(2);
+}
 function resetOnboard(){
   $("pname").value="";$("pemail").value="";$("customBal").value="";
   pickLevel=null;document.querySelectorAll(".level-opt").forEach(x=>x.classList.remove("on"));
