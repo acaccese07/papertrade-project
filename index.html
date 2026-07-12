@@ -12,6 +12,11 @@
   --gray-3:#B9B9BE; --gray-4:#6E6E73; --up:#00B04C; --dn:#FF3B30;
   --radius:18px; --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  --tabbar-bg:rgba(255,255,255,.88); --onboard-bg:#0A0A0A; --onboard-fg:#FFFFFF;
+}
+[data-theme="dark"]{
+  --ink:#F2F2F7; --paper:#1C1C1E; --gray-1:#000000; --gray-2:#2C2C2E;
+  --gray-3:#48484A; --gray-4:#8E8E93; --tabbar-bg:rgba(20,20,22,.85);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -29,10 +34,10 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .screen.active{display:block}
 
 /* ---------- ticker tape ---------- */
-#tape{background:var(--ink);color:var(--paper);overflow:hidden;white-space:nowrap;
+#tape{background:#0A0A0A;color:#FFFFFF;overflow:hidden;white-space:nowrap;
   padding:7px 0 calc(7px);padding-top:calc(7px + env(safe-area-inset-top));
   font-family:var(--mono);font-size:11px;flex-shrink:0}
-#tapeTrack{display:inline-block;animation:tape 45s linear infinite}
+#tapeTrack{display:inline-block;animation:tape 160s linear infinite}
 @keyframes tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .tape-item{margin:0 14px}
 .tape-item .u{color:#4ADE80}.tape-item .d{color:#FF6B61}
@@ -95,7 +100,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .hold-qty{font-size:11px;font-family:var(--mono);color:var(--gray-4)}
 
 /* ---------- tab bar ---------- */
-#tabs{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.88);
+#tabs{position:absolute;bottom:0;left:0;right:0;background:var(--tabbar-bg);
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--gray-2);
   display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;
@@ -131,18 +136,18 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .hint{text-align:center;font-size:12px;color:var(--gray-4);margin-top:10px;line-height:1.5}
 
 /* ---------- onboarding ---------- */
-#onboard{position:absolute;inset:0;background:var(--ink);color:var(--paper);z-index:100;
+#onboard{position:absolute;inset:0;background:var(--onboard-bg);color:var(--onboard-fg);z-index:100;
   display:flex;flex-direction:column;justify-content:center;padding:32px;text-align:center}
 #onboard h1{font-size:40px;font-weight:800;letter-spacing:-1.5px;line-height:1.05}
 #onboard p{color:#8E8E93;font-size:15px;margin:14px 0 34px;line-height:1.5}
 .bal-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .bal-opt{padding:20px 10px;border-radius:16px;border:1.5px solid #333;font-family:var(--mono);
   font-size:20px;font-weight:700;color:var(--paper)}
-.bal-opt.on{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+.bal-opt.on{background:var(--onboard-fg);color:var(--onboard-bg);border-color:var(--onboard-fg)}
 #customBal{width:100%;padding:16px;border-radius:16px;border:1.5px solid #333;text-align:center;
   font-family:var(--mono);font-size:18px;color:var(--paper);margin-bottom:22px}
 #customBal::placeholder{color:#555}
-.cta.white{background:var(--paper);color:var(--ink)}
+.cta.white{background:var(--onboard-fg);color:var(--onboard-bg)}
 
 /* ---------- bot ---------- */
 .strat{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1.5px solid var(--gray-2);
@@ -151,6 +156,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 .strat b{font-size:14px}.strat p{font-size:12px;color:var(--gray-4);margin-top:2px;line-height:1.4}
 .dot{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--gray-3);flex-shrink:0;margin-top:1px}
 .strat.on .dot{border:5.5px solid var(--ink)}
+.budget-box{background:var(--gray-1);border-radius:14px;padding:14px 16px;margin:14px 0 10px}
 .log-item{padding:11px 0;border-bottom:1px solid var(--gray-1);font-size:13px;line-height:1.45}
 .log-item .why{color:var(--gray-4);font-size:12px;margin-top:2px}
 .log-time{font-family:var(--mono);font-size:10px;color:var(--gray-3)}
@@ -169,6 +175,7 @@ canvas{width:100%;display:block}
 .keyinput{width:100%;background:var(--gray-1);border-radius:10px;padding:12px 14px;
   font-family:var(--mono);font-size:13px;margin-top:8px}
 </style>
+<script>document.documentElement.setAttribute("data-theme",localStorage.getItem("ppt-theme")||"light")</script>
 </head>
 <body>
 <div id="app">
@@ -199,7 +206,7 @@ canvas{width:100%;display:block}
       <div class="label">Total value</div>
       <div class="bignum" id="pfTotal">$0</div>
       <div class="subnum" id="pfPL"></div>
-      <canvas id="equityChart" height="120" style="margin-top:14px"></canvas>
+      <canvas id="equityChart" height="90" style="margin-top:14px"></canvas>
     </div>
     <div style="display:flex;gap:10px">
       <div class="card" style="flex:1"><div class="label">Cash</div><div class="bignum" style="font-size:22px" id="pfCash"></div></div>
@@ -221,7 +228,8 @@ canvas{width:100%;display:block}
   <!-- ACTIVITY -->
   <div class="screen" id="scr-activity">
     <div class="hdr"><h1>Activity</h1></div>
-    <div class="card" id="actList"></div>
+    <div class="chips" id="actFilters"></div>
+    <div id="actList"></div>
   </div>
 
   <!-- TABS -->
@@ -503,6 +511,7 @@ function renderTape(){
   const items=ASSETS.map(a=>{const c=chg24[a.id];
     return `<span class="tape-item">${a.id} <span class="${c>=0?"u":"d"}">${fmt(prices[a.id])} ${c>=0?"+":""}${c.toFixed(1)}%</span></span>`}).join("");
   $("tapeTrack").innerHTML=items+items;
+  $("tapeTrack").style.animationDuration=Math.max(60,ASSETS.length*2)+"s";
 }
 
 /* ================= TRADE SHEET ================= */
@@ -636,8 +645,8 @@ async function drawSpark(){
   if($("histNote"))$("histNote").textContent=tf==="live"?"Session ticks":(r.real?"Real market history":"Simulated history — live data unlocks real candles");
 }
 function drawCandles(canvas,data){
-  const dpr=window.devicePixelRatio||1,w=canvas.clientWidth||340,h=canvas.getAttribute("height")*1;
-  canvas.width=w*dpr;canvas.height=h*dpr;
+  const dpr=window.devicePixelRatio||1,w=canvas.clientWidth||340,h=canvas.dataset.cssH||(canvas.dataset.cssH=canvas.getAttribute("height")*1);
+  canvas.width=w*dpr;canvas.height=h*dpr;canvas.style.height=h+"px";
   const x=canvas.getContext("2d");x.scale(dpr,dpr);
   if(!data||data.length<2)return;
   let mn=Infinity,mx=-Infinity;
@@ -653,8 +662,8 @@ function drawCandles(canvas,data){
   });
 }
 function drawLine(canvas,data,color){
-  const dpr=window.devicePixelRatio||1,w=canvas.clientWidth||340,h=canvas.getAttribute("height")*1;
-  canvas.width=w*dpr;canvas.height=h*dpr;
+  const dpr=window.devicePixelRatio||1,w=canvas.clientWidth||340,h=canvas.dataset.cssH||(canvas.dataset.cssH=canvas.getAttribute("height")*1);
+  canvas.width=w*dpr;canvas.height=h*dpr;canvas.style.height=h+"px";
   const x=canvas.getContext("2d");x.scale(dpr,dpr);
   if(data.length<2)return;
   const mn=Math.min(...data),mx=Math.max(...data),rg=mx-mn||1;
@@ -706,14 +715,47 @@ function renderPortfolio(){
 }
 
 /* ================= ACTIVITY ================= */
+const ACT_FILTERS=[["all","All"],["buy","Buys"],["sell","Sells"],["you","You"],["bot","Bots"]];
+let actFilter="all";
+function setActFilter(f){actFilter=f;renderActivity()}
+function dayLabel(ts){
+  const d=new Date(ts),today=new Date(),y=new Date();y.setDate(today.getDate()-1);
+  const same=(a,b)=>a.toDateString()===b.toDateString();
+  if(same(d,today))return"Today";
+  if(same(d,y))return"Yesterday";
+  return d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:d.getFullYear()!==today.getFullYear()?"numeric":undefined});
+}
 function renderActivity(){
-  const all=[...S.trades];
-  $("actList").innerHTML=all.length?all.slice(0,80).map(tr=>{
-    const d=new Date(tr.t);
-    return `<div class="log-item"><span class="tag ${tr.side}">${tr.side.toUpperCase()}</span>
-      <b>${fmtQty(tr.qty)} ${tr.id}</b> @ ${fmt(tr.price)} — ${fmt(tr.val)}${tr.note?` <span class="pill" style="font-size:9px;padding:2px 6px">${tr.note.toUpperCase()}</span>`:""}
-      <div class="log-time">${tr.who==="bot-crypto"?"🤖 Crypto Bot · ":tr.who==="bot-stock"?"🤖 Stock Bot · ":tr.who==="bot"?"🤖 Bot · ":""}${d.toLocaleDateString()} ${d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div></div>`;
-  }).join(""):`<div class="empty">Your trade history will appear here.</div>`;
+  $("actFilters").innerHTML=ACT_FILTERS.map(([k,l])=>
+    `<button class="chip ${actFilter===k?"on":""}" onclick="setActFilter('${k}')">${l}</button>`).join("");
+  let all=[...S.trades];
+  if(actFilter==="buy")all=all.filter(t=>t.side==="buy");
+  else if(actFilter==="sell")all=all.filter(t=>t.side==="sell");
+  else if(actFilter==="you")all=all.filter(t=>t.who==="you");
+  else if(actFilter==="bot")all=all.filter(t=>t.who!=="you");
+  if(!all.length){
+    $("actList").innerHTML=`<div class="empty">${S.trades.length?"No activity matches this filter.":"Your trade history will appear here."}</div>`;
+    return;
+  }
+  let html="",lastLabel=null;
+  all.slice(0,80).forEach(tr=>{
+    const label=dayLabel(tr.t);
+    if(label!==lastLabel){html+=`<div class="label" style="margin:${lastLabel?"16px":"0"} 0 8px 4px">${label}</div>`;lastLabel=label}
+    const a=ASSETS.find(x=>x.id===tr.id),crypto=a&&a.t==="crypto",d=new Date(tr.t);
+    const who=tr.who==="bot-crypto"?"🤖 Crypto Bot":tr.who==="bot-stock"?"🤖 Stock Bot":tr.who==="bot"?"🤖 Bot":"";
+    html+=`<div class="row" style="cursor:default">
+      <div class="badge ${crypto?"crypto":""}">${tr.id.slice(0,4)}</div>
+      <div class="row-mid">
+        <div class="row-name"><span class="tag ${tr.side}">${tr.side.toUpperCase()}</span>${tr.id}${tr.note?` <span class="pill" style="font-size:9px;padding:2px 6px">${tr.note.toUpperCase()}</span>`:""}</div>
+        <div class="row-sub">${fmtQty(tr.qty)} @ ${fmt(tr.price)}${who?" · "+who:""}</div>
+      </div>
+      <div class="row-right">
+        <div class="row-price">${fmt(tr.val)}</div>
+        <div class="row-chg" style="color:var(--gray-4);font-weight:500">${d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>
+      </div>
+    </div>`;
+  });
+  $("actList").innerHTML=html;
 }
 
 /* ================= SETTINGS ================= */
@@ -725,6 +767,13 @@ function openSettings(){
        Crypto is live automatically. For live stocks, paste a free API key from finnhub.io (takes 1 minute to create).</div></div>
      <input class="keyinput" id="fhKey" placeholder="Finnhub API key" value="${esc(S.finnhubKey||"")}">
      <button class="cta" style="margin-top:10px;padding:13px" onclick="saveKey()">Save key</button>
+   </div>
+   <div class="settings-row" style="display:block">
+     <div style="margin-bottom:8px"><b>🎨 Appearance</b></div>
+     <div class="seg">
+       <button class="${getTheme()==="light"?"on":""}" onclick="setTheme('light')">☀️ Light</button>
+       <button class="${getTheme()==="dark"?"on":""}" onclick="setTheme('dark')">🌙 Dark</button>
+     </div>
    </div>
    <div class="settings-row" style="display:block">
      <div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>👤 Profile</b><b>${esc(profiles.active||"")}</b></div>
@@ -745,6 +794,8 @@ function openSettings(){
 }
 function saveKey(){S.finnhubKey=$("fhKey").value.trim();scheduleSave();closeSheet();
   toast(S.finnhubKey?"Key saved — fetching live stocks":"Key removed");if(S.finnhubKey)pollStocks()}
+function getTheme(){return localStorage.getItem("ppt-theme")||"light"}
+function setTheme(t){localStorage.setItem("ppt-theme",t);document.documentElement.setAttribute("data-theme",t);openSettings()}
 function resetAll(){
   if(!confirm("Delete profile '"+profiles.active+"'? Its portfolio, bots and history will be wiped."))return;
   store.set("ppt-state:"+profiles.active,null);
@@ -785,13 +836,13 @@ function updateMktPill(){
 /* ================= TWO BOTS: CRYPTO (24/7) + STOCK (NYSE HOURS) ================= */
 const BOT_STRATS={
  crypto:{
-  steady:{name:"Steady Stacker",desc:"Dollar-cost averages into BTC, ETH and SOL around the clock. Takes profit at +10%, never panic-sells.",pool:["BTC","ETH","SOL"],risk:.06,tp:10,sl:null,every:45},
-  dip:{name:"Dip Hunter",desc:"Buys crypto majors when they fall below their recent average, sells the bounce. Runs 24/7.",pool:["BTC","ETH","SOL","XRP","ADA"],risk:.10,tp:6,sl:-8,every:30},
-  degen:{name:"Meme Degen",desc:"Chases whichever meme coin is pumping hardest. Wild swings — educational chaos.",pool:["DOGE","SHIB","PEPE","BONK","WIF","SOL"],risk:.18,tp:9,sl:-6,every:20}},
+  steady:{ic:"🐢",name:"Steady Stacker",desc:"Dollar-cost averages into BTC, ETH and SOL around the clock. Takes profit at +10%, never panic-sells.",pool:["BTC","ETH","SOL"],risk:.06,tp:10,sl:null,every:45},
+  dip:{ic:"🎯",name:"Dip Hunter",desc:"Buys crypto majors when they fall below their recent average, sells the bounce. Runs 24/7.",pool:["BTC","ETH","SOL","XRP","ADA"],risk:.10,tp:6,sl:-8,every:30},
+  degen:{ic:"🎲",name:"Meme Degen",desc:"Chases whichever meme coin is pumping hardest. Wild swings — educational chaos.",pool:["DOGE","SHIB","PEPE","BONK","WIF","SOL"],risk:.18,tp:9,sl:-6,every:20}},
  stock:{
-  steady:{name:"Blue-Chip Builder",desc:"Dollar-cost averages into US large caps and Canadian banks during market hours.",pool:["AAPL","MSFT","GOOGL","RY","TD","BMO"],risk:.06,tp:10,sl:null,every:45},
-  dip:{name:"Dip Hunter",desc:"Buys quality names trading below their recent average, sells the recovery.",pool:["NVDA","TSLA","AMZN","META","SHOP","AMD"],risk:.10,tp:6,sl:-8,every:30},
-  degen:{name:"Momentum Chaser",desc:"Rides the hottest movers — TSLA, PLTR, COIN and friends. High risk, fast trades.",pool:["TSLA","PLTR","COIN","AMD","SHOP","NVDA"],risk:.16,tp:8,sl:-6,every:20}}
+  steady:{ic:"🧱",name:"Blue-Chip Builder",desc:"Dollar-cost averages into US large caps and Canadian banks during market hours.",pool:["AAPL","MSFT","GOOGL","RY","TD","BMO"],risk:.06,tp:10,sl:null,every:45},
+  dip:{ic:"🎯",name:"Dip Hunter",desc:"Buys quality names trading below their recent average, sells the recovery.",pool:["NVDA","TSLA","AMZN","META","SHOP","AMD"],risk:.10,tp:6,sl:-8,every:30},
+  degen:{ic:"🚀",name:"Momentum Chaser",desc:"Rides the hottest movers — TSLA, PLTR, COIN and friends. High risk, fast trades.",pool:["TSLA","PLTR","COIN","AMD","SHOP","NVDA"],risk:.16,tp:8,sl:-6,every:20}}
 };
 const BOT_META={crypto:{label:"Crypto Bot",badge:"24/7"},stock:{label:"Stock Bot",badge:"NYSE hours"}};
 let botPick={crypto:"steady",stock:"steady"};
@@ -828,34 +879,41 @@ function renderBotSection(k){
     el.innerHTML=head+`<div class="card">
      ${Object.entries(BOT_STRATS[k]).map(([sk,s])=>`
        <div class="strat ${sk===botPick[k]?"on":""}" onclick="botPick['${k}']='${sk}';renderBot()">
-         <div class="dot"></div><div><b>${s.name}</b><p>${s.desc}</p></div></div>`).join("")}
-     <div style="display:flex;align-items:center;gap:6px;margin:14px 2px 4px">
-       <span style="font-family:var(--mono);font-size:22px;font-weight:700">$</span>
-       <input id="budget-${k}" inputmode="numeric" value="${Math.max(0,Math.min(1000,Math.floor(S.cash/4)))}"
-         style="font-family:var(--mono);font-size:22px;font-weight:700;flex:1;border-bottom:1.5px solid var(--gray-2);padding-bottom:2px">
+         <div class="dot"></div><div><b>${s.ic} ${s.name}</b><p>${s.desc}</p></div></div>`).join("")}
+     <div class="budget-box">
+       <div class="label" style="margin-bottom:6px">Budget</div>
+       <div style="display:flex;align-items:center;gap:6px">
+         <span style="font-family:var(--mono);font-size:22px;font-weight:700">$</span>
+         <input id="budget-${k}" inputmode="numeric" value="${Math.max(0,Math.min(1000,Math.floor(S.cash/4)))}"
+           style="font-family:var(--mono);font-size:22px;font-weight:700;flex:1;background:none">
+       </div>
+       <div class="qpad" style="justify-content:flex-start;margin:10px 0 0">
+         ${[10,25,50,100].map(p=>`<button onclick="setBotBudgetPct('${k}',${p})">${p}%</button>`).join("")}
+       </div>
      </div>
      <div style="font-size:12px;color:var(--gray-4);margin-bottom:12px">Budget comes out of your cash (${fmt(S.cash)} available) and is returned when you stop the bot.</div>
      ${k==="stock"&&!open?`<div style="font-size:12px;color:var(--gray-4);margin-bottom:12px">⏸ NYSE is closed right now — you can activate it, and it will start trading ${nextOpenText()}.</div>`:""}
      <button class="cta" style="padding:14px" onclick="startBot('${k}')">Activate ${meta.label.toLowerCase()}</button></div>`;
   }else{
-    const v=botValue(k),pl=v-b.start,plp=b.start?pl/b.start*100:0,st=BOT_STRATS[k][b.strategy];
+    const v=botValue(k),pl=v-b.start,plp=b.start?pl/b.start*100:0,st=BOT_STRATS[k][b.strategy],holds=Object.keys(b.holdings);
     el.innerHTML=head+`
      <div class="card dark">
        <div style="display:flex;justify-content:space-between;align-items:center">
-         <div><div class="label">${st.name}</div>
+         <div><div class="label">${st.ic} ${st.name}</div>
            <div class="bignum" style="font-size:28px">${fmt(v)}</div>
            <div class="subnum ${pl>=0?"pos":"neg"}">${pl>=0?"+":"−"}${fmt(Math.abs(pl))} (${pl>=0?"+":""}${plp.toFixed(2)}%)</div></div>
          <div style="text-align:right;font-size:11px;color:#8E8E93;line-height:1.7">
-           Cash ${fmt(b.cash)}<br>${Object.keys(b.holdings).length} positions</div>
+           Cash ${fmt(b.cash)}<br>${holds.length} position${holds.length===1?"":"s"}</div>
        </div>
        ${k==="stock"&&!open?`<div style="font-size:12px;color:#8E8E93;margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a">⏸ Market closed — holding positions. Trading resumes ${nextOpenText()}.</div>`:""}
      </div>
-     ${Object.keys(b.holdings).map(id=>{const h=b.holdings[id],p=prices[id],hpl=p*h.qty-h.cost;
+     ${holds.length?`<div class="label" style="margin:14px 0 8px 4px">Holdings</div>`+holds.map(id=>{const h=b.holdings[id],p=prices[id],hpl=p*h.qty-h.cost;
        return `<div class="row" style="cursor:default;padding:11px 16px"><div class="badge ${k==="crypto"?"crypto":""}" style="width:36px;height:36px;font-size:10px">${id.slice(0,4)}</div>
          <div class="row-mid"><div class="row-name" style="font-size:14px">${id}</div><div class="row-sub">${fmtQty(h.qty)} units</div></div>
          <div class="row-right"><div class="row-price" style="font-size:14px">${fmt(h.qty*p)}</div>
-         <div class="row-chg ${hpl>=0?"pos":"neg"}">${hpl>=0?"+":""}${fmt(hpl).replace("$-","-$")}</div></div></div>`}).join("")}
-     <div class="card" style="margin-top:8px">${b.log.length?b.log.slice(0,20).map(l=>`
+         <div class="row-chg ${hpl>=0?"pos":"neg"}">${hpl>=0?"+":""}${fmt(hpl).replace("$-","-$")}</div></div></div>`}).join(""):""}
+     <div class="label" style="margin:14px 0 8px 4px">Recent activity</div>
+     <div class="card">${b.log.length?b.log.slice(0,20).map(l=>`
        <div class="log-item"><span class="tag ${l.side}">${l.side.toUpperCase()}</span><b>${l.id}</b> — ${fmt(l.val)}
          <div class="why">${l.why}</div>
          <div class="log-time">${new Date(l.t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</div></div>`).join("")
@@ -863,6 +921,7 @@ function renderBotSection(k){
      <button class="cta sell" style="padding:13px" onclick="stopBot('${k}')">Stop &amp; return funds</button>`;
   }
 }
+function setBotBudgetPct(k,pct){$("budget-"+k).value=Math.max(0,Math.floor(S.cash*pct/100))}
 function startBot(k){
   const v=parseFloat($("budget-"+k).value)||0;
   if(v<=0)return toast("Enter a bot budget");
