@@ -297,6 +297,7 @@ canvas{width:100%;display:block}
     </div>
   </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ================= ASSET CATALOG ================= */
 const ASSETS=[
@@ -403,6 +404,77 @@ const store={
   }catch(e){}}
 };
 
+/* ================= CLOUD SYNC (Supabase) =================
+   Optional layer on top of the localStorage profiles above: signing in with
+   a magic link backs the currently-active profile up to Supabase and pulls
+   it back down on another device. Everything still works fully offline if
+   this never loads (no key configured, CDN blocked, etc). */
+const SUPABASE_URL="https://iskyoiimykxqtygqxwwb.supabase.co";
+const SUPABASE_KEY="sb_publishable_KXQRhXlM058xNHP1G2YFNw_s7VC-Lr0";
+let sb=null;
+try{if(window.supabase)sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){}
+let cloudUser=null,cloudResolved=false;
+let localReadyResolve;const localReadyPromise=new Promise(r=>localReadyResolve=r);
+function cloudSyncBox(){
+  if(!sb)return`<div style="font-size:12px;color:var(--gray-4)">Cloud sync isn't available right now.</div>`;
+  if(cloudUser)return`<div style="font-size:13px;margin-bottom:10px">Signed in as <b>${esc(cloudUser.email)}</b> — this profile syncs across your devices.</div>
+    <button class="cta sell" style="padding:11px" onclick="cloudSignOut()">Sign out</button>`;
+  return`<div style="font-size:12px;color:var(--gray-4);margin-bottom:8px;line-height:1.5">Sign in with a magic link to back this profile up and pick it up on another device — no password needed.</div>
+    <input class="keyinput" id="cloudEmail" placeholder="you@email.com" type="email">
+    <button class="cta" style="margin-top:10px;padding:13px" onclick="sendMagicLink($('cloudEmail').value.trim())">Send magic link</button>`;
+}
+async function sendMagicLink(email){
+  if(!sb)return toast("Cloud sync isn't available right now");
+  if(!email||!email.includes("@"))return toast("Enter a valid email");
+  try{
+    const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.href.split("#")[0]}});
+    if(error)throw error;
+    toast("Magic link sent — check your email 📬");
+  }catch(e){toast("Couldn't send link — try again")}
+}
+async function cloudSignOut(){
+  if(!sb)return;
+  try{await sb.auth.signOut()}catch(e){}
+  cloudUser=null;cloudResolved=false;
+  toast("Signed out of cloud sync");
+  if($("cloudSyncSection"))openSettings();
+}
+async function pushCloud(){
+  if(!sb||!cloudUser||!S)return;
+  try{await sb.from("profiles").upsert({id:cloudUser.id,display_name:profiles.active||"Trader",state:S})}catch(e){}
+}
+async function reconcileCloud(){
+  if(!sb||!cloudUser)return;
+  try{
+    const{data,error}=await sb.from("profiles").select("state,display_name").eq("id",cloudUser.id).maybeSingle();
+    if(error)throw error;
+    const hasCloudData=data&&data.state&&Object.keys(data.state).length;
+    if(hasCloudData&&S&&profiles.active){
+      const useCloud=confirm(`Found saved progress in the cloud for ${cloudUser.email}.\n\nOK = restore cloud data (replaces what's on this device)\nCancel = keep this device's data and upload it instead`);
+      if(useCloud)adoptCloudState(data);else await pushCloud();
+    }else if(hasCloudData){
+      adoptCloudState(data);
+    }else if(S){
+      await pushCloud();
+    }
+  }catch(e){console.warn("cloud sync failed",e)}
+}
+function adoptCloudState(data){
+  S=data.state;migrateState();
+  profiles.active=data.display_name||"Trader";
+  if(!profiles.list.includes(profiles.active))profiles.list.push(profiles.active);
+  store.set("ppt-profiles",profiles);saveNow();
+  $("onboard").style.display="none";boot();refreshAll();
+}
+async function handleCloudSession(session){
+  await localReadyPromise;
+  if(!session){cloudUser=null;if($("cloudSyncSection"))openSettings();return}
+  cloudUser=session.user;
+  if(!cloudResolved){cloudResolved=true;await reconcileCloud()}
+  if($("cloudSyncSection"))openSettings();
+}
+if(sb)sb.auth.onAuthStateChange((event,session)=>handleCloudSession(session));
+
 /* ================= STATE ================= */
 let S=null; // account state
 const prices={}, hist={}, chg24={};
@@ -416,7 +488,7 @@ function defaultState(bal){return{
   orders:[],reserved:0,ach:{},custom:[],finnhubKey:"",created:Date.now()
 }}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,800)}
-function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S)}
+function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S);if(sb&&cloudUser)pushCloud()}
 
 /* ================= PRICE ENGINE ================= */
 ASSETS.forEach(a=>{prices[a.id]=a.base;hist[a.id]=[a.base];chg24[a.id]=(Math.random()-0.45)*4});
@@ -808,6 +880,10 @@ function openSettings(){
        <button class="${getTheme()==="light"?"on":""}" onclick="setTheme('light')">☀️ Light</button>
        <button class="${getTheme()==="dark"?"on":""}" onclick="setTheme('dark')">🌙 Dark</button>
      </div>
+   </div>
+   <div class="settings-row" style="display:block" id="cloudSyncSection">
+     <div style="margin-bottom:8px"><b>☁️ Cloud Sync</b></div>
+     ${cloudSyncBox()}
    </div>
    <div class="settings-row" style="display:block">
      <div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>👤 Profile</b><b>${esc(profiles.active||"")}</b></div>
@@ -1299,9 +1375,10 @@ async function init(){
   }
   if(profiles.active){
     const st=await store.get("ppt-state:"+profiles.active);
-    if(st){S=st;migrateState();$("onboard").style.display="none";boot();return}
+    if(st){S=st;migrateState();$("onboard").style.display="none";boot();localReadyResolve();return}
   }
   // fresh device -> onboarding stays visible
+  localReadyResolve();
 }
 function boot(){
   if(booted){refreshAll();return}

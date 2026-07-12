@@ -13,6 +13,22 @@ Should print `RESULT: 83 passed, 0 failed` before and after any change.
 This is a static file — GitHub Pages, Netlify, or Vercel can all host it as-is.
 For GitHub Pages: push to a repo, enable Pages on the `main` branch, root folder.
 
+## Cloud sync (Supabase)
+Optional layer on top of the local profiles system — signing in with a magic
+link backs the active profile up to Supabase and pulls it down on another
+device. The app works fully offline if this is never configured.
+
+Setup (one-time):
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open the SQL Editor and run `supabase/schema.sql` from this repo.
+3. In Settings → API, copy the Project URL and anon/publishable key into the
+   `SUPABASE_URL`/`SUPABASE_KEY` constants near the top of the main `<script>`
+   in `index.html`.
+
+These are meant to be public client-side keys (Row Level Security in
+`schema.sql` scopes every row to `auth.uid()`), so it's fine that they ship in
+the static HTML — never put the `service_role` key here.
+
 ## Notes for whoever picks this up in Claude Code
 - Live crypto prices: CoinGecko public API, no key needed.
 - Live stock prices: requires a free Finnhub API key, entered in-app under Settings.
