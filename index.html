@@ -220,6 +220,7 @@ canvas{width:100%;display:block}
   <div class="screen" id="scr-portfolio">
     <div class="hdr"><h1>Portfolio</h1><div style="display:flex;gap:8px;align-items:center">
       <span class="pill" id="pfDay"></span>
+      <button class="iconbtn" onclick="sharePortfolioCard()" aria-label="Share portfolio" title="Share portfolio">📤</button>
       <button class="iconbtn" onclick="openLeaderboard()" aria-label="Leaderboard" title="Leaderboard">🏆</button></div></div>
     <div class="card dark">
       <div class="label">Total value</div>
@@ -493,8 +494,33 @@ async function reconcileCloud(){
     }else if(S){
       await pushCloud();
     }
+    if(!alreadyLinked)await claimPendingReferral();
     localStorage.setItem(linkKey,"1");
   }catch(e){console.warn("cloud sync failed",e)}
+}
+async function claimPendingReferral(){
+  const ref=localStorage.getItem("ppt-pending-ref");
+  if(!ref||!sb||!cloudUser||ref===cloudUser.id)return;
+  try{
+    await sb.functions.invoke("apply-referral",{body:{referrer_id:ref,new_user_id:cloudUser.id}});
+  }catch(e){}
+  localStorage.removeItem("ppt-pending-ref");
+}
+function openInviteSheet(){
+  const link=location.origin+location.pathname+"?ref="+cloudUser.id;
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🎁 Invite a friend</h2>
+   <p style="font-size:13px;color:var(--gray-4);margin-bottom:14px;line-height:1.5">Share your link — when someone signs up through it, you both get a ${fmt(REFERRAL_BONUS)} bonus.</p>
+   <div class="keyinput" style="word-break:break-all;margin-bottom:10px">${esc(link)}</div>
+   <button class="cta" style="padding:13px;margin-bottom:8px" onclick="shareInviteLink()">Share link</button>
+   <button class="cta sell" style="padding:12px" onclick="navigator.clipboard.writeText('${link}');toast('Link copied')">Copy link</button>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+async function shareInviteLink(){
+  const link=location.origin+location.pathname+"?ref="+cloudUser.id;
+  if(navigator.share){
+    try{await navigator.share({title:"PaperTrade",text:"Practice trading with fake money and real prices — join me:",url:link});return}catch(e){}
+  }
+  navigator.clipboard.writeText(link);toast("Link copied — share it anywhere");
 }
 function adoptCloudState(data){
   S=data.state;migrateState();
@@ -966,6 +992,49 @@ function renderPortfolio(){
   }).join(""):`<div class="empty">No positions yet.<br>Head to Markets and make your first trade — that's what the fake money is for.</div>`;
 }
 
+/* ================= SHARE PORTFOLIO CARD ================= */
+async function sharePortfolioCard(){
+  const tv=youValue(),pl=tv-S.start,plp=S.start?pl/S.start*100:0,up=pl>=0;
+  const W=700,H=900,canvas=document.createElement("canvas");
+  canvas.width=W;canvas.height=H;
+  const x=canvas.getContext("2d");
+  x.fillStyle="#0A0A0A";x.fillRect(0,0,W,H);
+  x.fillStyle="#8E8E93";x.font="600 22px -apple-system,sans-serif";x.fillText("📈 PaperTrade",50,80);
+  x.fillStyle="#8E8E93";x.font="600 15px ui-monospace,monospace";x.textTransform="uppercase";
+  x.fillText("ALL-TIME RETURN",50,180);
+  x.fillStyle=up?"#00E561":"#FF6B61";x.font="800 90px ui-monospace,monospace";
+  x.fillText(`${up?"+":""}${plp.toFixed(2)}%`,50,270);
+  x.fillStyle="#FFFFFF";x.font="700 42px ui-monospace,monospace";
+  x.fillText(fmt(tv),50,340);
+  x.fillStyle="#8E8E93";x.font="500 18px -apple-system,sans-serif";
+  x.fillText(`${Object.keys(S.holdings).length} position${Object.keys(S.holdings).length===1?"":"s"} · started at ${fmt(S.start)}`,50,375);
+  // mini equity line
+  const eq=S.equity.map(e=>e[1]);
+  if(eq.length>1){
+    const mn=Math.min(...eq),mx=Math.max(...eq),rg=mx-mn||1,cy0=650,ch=180,cx0=50,cw=W-100;
+    x.beginPath();
+    eq.forEach((v,i)=>{const px=cx0+i/(eq.length-1)*cw,py=cy0+ch-((v-mn)/rg)*ch;
+      i?x.lineTo(px,py):x.moveTo(px,py)});
+    x.strokeStyle=up?"#00E561":"#FF6B61";x.lineWidth=4;x.lineJoin="round";x.stroke();
+  }
+  x.fillStyle="#8E8E93";x.font="500 16px -apple-system,sans-serif";
+  x.fillText("Practice trading with fake money and real, live prices.",50,H-70);
+  x.fillStyle="#FFFFFF";x.font="700 16px -apple-system,sans-serif";
+  x.fillText("Try it free →",50,H-40);
+
+  canvas.toBlob(async blob=>{
+    if(!blob)return;
+    const file=new File([blob],"papertrade-portfolio.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:"My PaperTrade portfolio",text:"Practice trading with fake money and real prices"});return}catch(e){}
+    }
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download="papertrade-portfolio.png";a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    toast("Image saved — share it anywhere");
+  },"image/png");
+}
+
 /* ================= ACTIVITY ================= */
 const ACT_FILTERS=[["all","All"],["buy","Buys"],["sell","Sells"],["you","You"],["bot","Bots"]];
 let actFilter="all";
@@ -1037,6 +1106,7 @@ function openSettings(){
    </div>
    <button class="settings-row" style="width:100%;text-align:left" onclick="openGlossary()"><span>📖 Trading glossary</span><b>›</b></button>
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openMyAlerts()"><span>🔔 My price alerts</span><b>›</b></button>`:""}
+   ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openInviteSheet()"><span>🎁 Invite a friend</span><b>›</b></button>`:""}
    <div class="settings-row" style="display:block">
      <div style="margin-bottom:8px"><b>🏅 Badges</b> <span style="color:var(--gray-4);font-size:12px">${Object.keys(S.ach||{}).length}/${ACH.length}</span></div>
      <div style="display:flex;flex-wrap:wrap;gap:6px">${ACH.map(([id,ic,name])=>
@@ -1553,6 +1623,7 @@ function migrateState(){
   if(S.leaderboardOptIn===undefined)S.leaderboardOptIn=false;
   S.custom.forEach(a=>{if(!ASSETS.some(x=>x.id===a.id))registerAsset(a)});
 }
+const REFERRAL_BONUS=500;
 function startAccount(){
   let name=($("pname").value||"").trim()||("Trader "+(profiles.list.length+1));
   if(profiles.list.includes(name))return toast("That name is taken — pick another");
@@ -1561,10 +1632,14 @@ function startAccount(){
   S=defaultState(bal);
   S.email=($("pemail").value||"").trim();
   S.level=pickLevel||"some";
+  const ref=localStorage.getItem("ppt-pending-ref");
+  let welcomeMsg=`Welcome, ${name}! 👋`;
+  if(ref){S.cash+=REFERRAL_BONUS;S.start+=REFERRAL_BONUS;S.youBase+=REFERRAL_BONUS;
+    S.equity=[[Date.now(),S.cash]];welcomeMsg=`Welcome, ${name}! 👋 +${fmt(REFERRAL_BONUS)} referral bonus 🎁`}
   profiles.list.push(name);profiles.active=name;
   store.set("ppt-profiles",profiles);saveNow();
   $("onboard").style.display="none";
-  boot();toast("Welcome, "+name+"! 👋");
+  boot();toast(welcomeMsg);
 }
 async function switchProfile(name){
   saveNow();
@@ -1672,6 +1747,10 @@ function boot(){
   setInterval(()=>{botThink("crypto");botThink("stock")},5000);
   updateMktPill();setInterval(updateMktPill,20000);
 }
+(function captureReferral(){
+  const ref=new URLSearchParams(location.search).get("ref");
+  if(ref)localStorage.setItem("ppt-pending-ref",ref);
+})();
 init();
 </script>
 </body>

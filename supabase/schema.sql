@@ -129,3 +129,11 @@ alter table public.price_alerts enable row level security;
 drop policy if exists "manage own alerts" on public.price_alerts;
 create policy "manage own alerts" on public.price_alerts
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ---------- Referrals ----------
+-- referred_by is set once (never overwritten) the first time a new account
+-- successfully claims a referral link, via the apply-referral Edge Function
+-- (which uses the service-role key to credit the *referrer's* account --
+-- something the new user's own session could never do under RLS, since RLS
+-- only ever lets you write your own row).
+alter table public.profiles add column if not exists referred_by uuid references auth.users(id);

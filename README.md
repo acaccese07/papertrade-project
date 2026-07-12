@@ -68,6 +68,26 @@ strategy's exact 20-45s cooldown. Deploy/update it the same way as
 stock-proxy: `supabase functions deploy bot-tick`. The cron schedule itself
 is set up by re-running `schema.sql` (idempotent, safe to re-run).
 
+### Price alerts (push notifications)
+Uses Web Push (`sw.js` + `supabase/functions/bot-tick`'s alert-checking pass,
+same 2-minute cron cycle as bots) with VAPID keys. If setting this up on a
+fresh project, generate a keypair with `npx web-push generate-vapid-keys`,
+then `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=...` and
+put the public key in the `VAPID_PUBLIC_KEY` constant in `index.html`. Only
+works for signed-in cloud accounts. Known platform limit: iOS Safari only
+supports Web Push for PWAs added to the home screen, not regular tabs.
+
+### Referrals
+`?ref=<user-id>` in the URL gives a new signup a $500 starting-cash bonus
+immediately (purely local, no server needed), and once they sign in with a
+cloud account, `supabase/functions/apply-referral` credits the referrer
+$500 too (needs the service-role key to write to someone else's row, which
+is exactly what that function is for). `referred_by` on `profiles` is set
+once and never overwritten, which is the actual guard against re-claiming
+the same link repeatedly. Deliberately low-stakes anti-abuse: this is fake
+money, so "can't be spammed pointlessly" was the bar, not airtight fraud
+prevention.
+
 ## Notes for whoever picks this up in Claude Code
 - Live crypto prices: CoinGecko public API, no key needed.
 - Live stock prices: proxied through the `stock-proxy` Supabase Edge Function above.
