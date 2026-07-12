@@ -137,15 +137,27 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
 
 /* ---------- onboarding ---------- */
 #onboard{position:absolute;inset:0;background:var(--onboard-bg);color:var(--onboard-fg);z-index:100;
-  display:flex;flex-direction:column;justify-content:center;padding:32px;text-align:center}
-#onboard h1{font-size:40px;font-weight:800;letter-spacing:-1.5px;line-height:1.05}
-#onboard p{color:#8E8E93;font-size:15px;margin:14px 0 34px;line-height:1.5}
+  display:flex;flex-direction:column;padding:32px;text-align:center}
+#onboard h1{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1.1}
+#onboard p{color:#8E8E93;font-size:15px;margin:12px 0 28px;line-height:1.5}
+.ob-dots{display:flex;gap:6px;justify-content:center;padding-top:env(safe-area-inset-top);margin-bottom:8px}
+.ob-dot{width:7px;height:7px;border-radius:50%;background:#333;transition:.25s}
+.ob-dot.on{background:var(--onboard-fg);width:20px;border-radius:4px}
+.ob-step{display:none;flex-direction:column;justify-content:center;flex:1;position:relative}
+.ob-step.on{display:flex}
+.ob-back{position:absolute;left:0;top:-6px;width:34px;height:34px;border-radius:50%;
+  border:1.5px solid #333;color:var(--onboard-fg);font-size:20px;display:flex;
+  align-items:center;justify-content:center}
+.level-opt{display:flex;align-items:center;gap:12px;width:100%;padding:16px 18px;border-radius:14px;
+  border:1.5px solid #333;margin-bottom:10px;text-align:left;font-size:15px;font-weight:600;
+  color:var(--onboard-fg)}
+.level-opt.on{background:var(--onboard-fg);color:var(--onboard-bg);border-color:var(--onboard-fg)}
 .bal-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .bal-opt{padding:20px 10px;border-radius:16px;border:1.5px solid #333;font-family:var(--mono);
-  font-size:20px;font-weight:700;color:var(--paper)}
+  font-size:20px;font-weight:700;color:var(--onboard-fg)}
 .bal-opt.on{background:var(--onboard-fg);color:var(--onboard-bg);border-color:var(--onboard-fg)}
 #customBal{width:100%;padding:16px;border-radius:16px;border:1.5px solid #333;text-align:center;
-  font-family:var(--mono);font-size:18px;color:var(--paper);margin-bottom:22px}
+  font-family:var(--mono);font-size:18px;color:var(--onboard-fg);margin-bottom:22px;background:none}
 #customBal::placeholder{color:#555}
 .cta.white{background:var(--onboard-fg);color:var(--onboard-bg)}
 
@@ -250,17 +262,39 @@ canvas{width:100%;display:block}
 
   <!-- ONBOARDING -->
   <div id="onboard">
-    <h1>Learn to trade.<br>Risk nothing.</h1>
-    <p>Practice with live markets and virtual money.<br>US &amp; Canadian stocks, plus crypto.</p>
-    <input id="pname" placeholder="Your name" maxlength="20" style="width:100%;padding:15px;border-radius:16px;border:1.5px solid #333;text-align:center;font-size:16px;font-weight:600;color:var(--paper);margin-bottom:14px;background:none">
-    <div class="bal-grid">
-      <button class="bal-opt" data-b="1000">$1,000</button>
-      <button class="bal-opt on" data-b="10000">$10,000</button>
-      <button class="bal-opt" data-b="25000">$25,000</button>
-      <button class="bal-opt" data-b="100000">$100,000</button>
+    <div class="ob-dots"><span class="ob-dot on"></span><span class="ob-dot"></span><span class="ob-dot"></span></div>
+
+    <div class="ob-step on" id="ob-1">
+      <h1>Hey there 👋<br>Let's get you set up.</h1>
+      <p>Practice trading with live markets and virtual money.<br>US &amp; Canadian stocks, plus crypto — zero risk.</p>
+      <input id="pname" placeholder="Your name" maxlength="20" style="width:100%;padding:15px;border-radius:16px;border:1.5px solid #333;text-align:center;font-size:16px;font-weight:600;color:var(--onboard-fg);margin-bottom:10px;background:none">
+      <input id="pemail" type="email" placeholder="Email (optional)" maxlength="60" style="width:100%;padding:15px;border-radius:16px;border:1.5px solid #333;text-align:center;font-size:16px;font-weight:600;color:var(--onboard-fg);margin-bottom:14px;background:none">
+      <button class="cta white" onclick="obNext(1)">Continue</button>
     </div>
-    <input id="customBal" placeholder="Or type a custom amount" inputmode="numeric">
-    <button class="cta white" onclick="startAccount()">Start trading</button>
+
+    <div class="ob-step" id="ob-2">
+      <button class="ob-back" onclick="obBack(2)">‹</button>
+      <h1>What's your trading experience?</h1>
+      <p>So we can keep the glossary and tips at the right level for you.</p>
+      <button class="level-opt" data-lv="new">🌱 <span>New to investing</span></button>
+      <button class="level-opt" data-lv="some">📈 <span>Some experience</span></button>
+      <button class="level-opt" data-lv="pro">🧠 <span>Seasoned trader</span></button>
+      <button class="cta white" style="margin-top:8px" onclick="obNext(2)">Continue</button>
+    </div>
+
+    <div class="ob-step" id="ob-3">
+      <button class="ob-back" onclick="obBack(3)">‹</button>
+      <h1>Pick your starting balance.</h1>
+      <p>Fake money, real practice. You can reset anytime.</p>
+      <div class="bal-grid">
+        <button class="bal-opt" data-b="1000">$1,000</button>
+        <button class="bal-opt on" data-b="10000">$10,000</button>
+        <button class="bal-opt" data-b="25000">$25,000</button>
+        <button class="bal-opt" data-b="100000">$100,000</button>
+      </div>
+      <input id="customBal" placeholder="Or type a custom amount" inputmode="numeric">
+      <button class="cta white" onclick="startAccount()">Start trading</button>
+    </div>
   </div>
 </div>
 <script>
@@ -802,7 +836,7 @@ function resetAll(){
   profiles.list=profiles.list.filter(n=>n!==profiles.active);
   profiles.active=null;store.set("ppt-profiles",profiles);
   S=null;closeSheet();
-  $("pname").value="";
+  resetOnboard();
   $("onboard").style.display="flex";
 }
 
@@ -1158,10 +1192,25 @@ function registerAsset(a){
 
 /* ================= PROFILES, ONBOARDING & BOOT ================= */
 let profiles={list:[],active:null},booted=false;
-let pickBal=10000;
+let pickBal=10000,pickLevel=null;
 document.querySelectorAll(".bal-opt").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".bal-opt").forEach(x=>x.classList.remove("on"));
   b.classList.add("on");pickBal=+b.dataset.b;$("customBal").value=""});
+document.querySelectorAll(".level-opt").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".level-opt").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");pickLevel=b.dataset.lv});
+function showObStep(n){
+  document.querySelectorAll(".ob-step").forEach(s=>s.classList.remove("on"));
+  $("ob-"+n).classList.add("on");
+  document.querySelectorAll(".ob-dot").forEach((d,i)=>d.classList.toggle("on",i===n-1));
+}
+function obNext(from){showObStep(from+1)}
+function obBack(from){showObStep(from-1)}
+function resetOnboard(){
+  $("pname").value="";$("pemail").value="";$("customBal").value="";
+  pickLevel=null;document.querySelectorAll(".level-opt").forEach(x=>x.classList.remove("on"));
+  showObStep(1);
+}
 
 function migrateState(){
   if(!S.bots)S.bots={crypto:emptyBot(),stock:emptyBot()};
@@ -1171,6 +1220,7 @@ function migrateState(){
   if(S.youBase===undefined)S.youBase=S.start;
   if(!S.custom)S.custom=[];
   if(!S.orders)S.orders=[];if(S.reserved===undefined)S.reserved=0;if(!S.ach)S.ach={};
+  if(S.email===undefined)S.email="";if(!S.level)S.level="some";
   S.custom.forEach(a=>{if(!ASSETS.some(x=>x.id===a.id))registerAsset(a)});
 }
 function startAccount(){
@@ -1179,6 +1229,8 @@ function startAccount(){
   const custom=parseFloat($("customBal").value.replace(/[^0-9.]/g,""));
   const bal=custom>0?custom:pickBal;
   S=defaultState(bal);
+  S.email=($("pemail").value||"").trim();
+  S.level=pickLevel||"some";
   profiles.list.push(name);profiles.active=name;
   store.set("ppt-profiles",profiles);saveNow();
   $("onboard").style.display="none";
@@ -1195,7 +1247,7 @@ async function switchProfile(name){
 }
 function newProfile(){
   saveNow();closeSheet();
-  $("pname").value="";$("customBal").value="";
+  resetOnboard();
   $("onboard").style.display="flex";
 }
 function refreshAll(){
