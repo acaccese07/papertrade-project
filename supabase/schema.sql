@@ -51,15 +51,57 @@ for each row execute function public.touch_updated_at();
 alter table public.profiles add column if not exists leaderboard_opt_in boolean not null default false;
 alter table public.profiles add column if not exists leaderboard_return_pct numeric;
 alter table public.profiles add column if not exists leaderboard_value numeric;
+-- bot leaderboard: combined return % across the user's active bots, plus a
+-- human label of what they're running ("🐢 Steady Stacker + 🚀 Momentum Chaser")
+alter table public.profiles add column if not exists leaderboard_bot_return_pct numeric;
+alter table public.profiles add column if not exists leaderboard_bot_label text;
+-- weekly recap snapshot: what the user's return % was at the last Monday
+-- recap, so the next recap can report the week's delta
+alter table public.profiles add column if not exists week_start_pct numeric;
+alter table public.profiles add column if not exists week_start_at timestamptz;
 
-create or replace view public.leaderboard_public as
-  select id, display_name, leaderboard_return_pct, leaderboard_value, updated_at
+-- drop+recreate rather than "or replace": postgres refuses to reorder/insert
+-- view columns in place, and column order here isn't worth preserving
+drop view if exists public.leaderboard_public;
+create view public.leaderboard_public as
+  select id, display_name, leaderboard_return_pct, leaderboard_value,
+         leaderboard_bot_return_pct, leaderboard_bot_label, updated_at
   from public.profiles
   where leaderboard_opt_in = true
   order by leaderboard_return_pct desc nulls last
   limit 100;
 
 grant select on public.leaderboard_public to anon, authenticated;
+
+-- ---------- Head-to-head challenges ----------
+-- A challenge is "same market, 7 days, best return-delta wins". Baselines are
+-- each side's leaderboard_return_pct at accept time; resolution happens in
+-- the bot-tick cron once ends_at passes, comparing each side's current pct to
+-- their baseline. Rows are created by the challenger directly (RLS below);
+-- accepting writes the opponent's half onto someone else's row, so that goes
+-- through the challenge-accept Edge Function (service role), same pattern as
+-- apply-referral.
+
+create table if not exists public.challenges (
+  id uuid primary key default gen_random_uuid(),
+  challenger uuid not null references auth.users(id) on delete cascade,
+  challenger_name text not null default 'Trader',
+  opponent uuid references auth.users(id) on delete cascade,
+  opponent_name text,
+  challenger_start_pct numeric,
+  opponent_start_pct numeric,
+  status text not null default 'open' check (status in ('open','active','done')),
+  winner uuid,
+  ends_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.challenges enable row level security;
+drop policy if exists "read own or open challenges" on public.challenges;
+create policy "read own or open challenges" on public.challenges
+  for select using (auth.uid() = challenger or auth.uid() = opponent or status = 'open');
+drop policy if exists "create own challenges" on public.challenges;
+create policy "create own challenges" on public.challenges
+  for insert with check (auth.uid() = challenger);
 
 -- ---------- 24/7 bot execution ----------
 -- Schedules supabase/functions/bot-tick to run every 2 minutes via pg_cron,

@@ -88,6 +88,21 @@ the same link repeatedly. Deliberately low-stakes anti-abuse: this is fake
 money, so "can't be spammed pointlessly" was the bar, not airtight fraud
 prevention.
 
+### Head-to-head challenges & weekly recaps
+Challenges ("7 days, best return-delta wins") live in the `challenges` table;
+creating one is a direct client insert (RLS), accepting goes through the
+`challenge-accept` Edge Function (cross-user write), and resolution + the
+Monday-9am-ET weekly recap push both piggyback on the existing bot-tick cron
+— no extra schedules. Deploy: `supabase functions deploy challenge-accept`.
+
+### Custom bots, missions, Time Machine, insights, news
+All client-side features layered on existing infrastructure: custom bot
+configs ride inside the state blob (`bot.custom`, sanitized server-side in
+bot-tick before execution), missions/insights/Time Machine are pure client
+code (Time Machine replays CoinGecko's last-365-days daily data — free-tier
+historical limit is why it's "last 12 months" and not the 2020 crash), and
+per-asset news is a `news` type on stock-proxy (Finnhub company-news).
+
 ## Notes for whoever picks this up in Claude Code
 - Live crypto prices: CoinGecko public API, no key needed.
 - Live stock prices: proxied through the `stock-proxy` Supabase Edge Function above.

@@ -220,6 +220,7 @@ canvas{width:100%;display:block}
   <div class="screen" id="scr-portfolio">
     <div class="hdr"><h1>Portfolio</h1><div style="display:flex;gap:8px;align-items:center">
       <span class="pill" id="pfDay"></span>
+      <button class="iconbtn" onclick="openInsights()" aria-label="Insights" title="Insights">📊</button>
       <button class="iconbtn" onclick="sharePortfolioCard()" aria-label="Share portfolio" title="Share portfolio">📤</button>
       <button class="iconbtn" onclick="openLeaderboard()" aria-label="Leaderboard" title="Leaderboard">🏆</button></div></div>
     <div class="card dark">
@@ -471,8 +472,14 @@ function setLeaderboardOptIn(on){
 async function pushCloud(){
   if(!sb||!cloudUser||!S)return;
   const v=youValue(),returnPct=S.start?(v-S.start)/S.start*100:0;
+  let botStart=0,botVal=0;const botLabels=[];
+  ["crypto","stock"].forEach(k=>{const b=S.bots&&S.bots[k];
+    if(b&&b.active){botStart+=b.start;botVal+=botValue(k);
+      const l=botStratLabel(k);botLabels.push(l.ic+" "+l.name)}});
   try{await sb.from("profiles").upsert({id:cloudUser.id,display_name:profiles.active||"Trader",state:S,
-    leaderboard_opt_in:!!S.leaderboardOptIn,leaderboard_return_pct:returnPct,leaderboard_value:v})}catch(e){}
+    leaderboard_opt_in:!!S.leaderboardOptIn,leaderboard_return_pct:returnPct,leaderboard_value:v,
+    leaderboard_bot_return_pct:botStart?(botVal-botStart)/botStart*100:null,
+    leaderboard_bot_label:botLabels.join(" + ")||null})}catch(e){}
 }
 async function reconcileCloud(){
   if(!sb||!cloudUser)return;
@@ -495,6 +502,7 @@ async function reconcileCloud(){
       await pushCloud();
     }
     if(!alreadyLinked)await claimPendingReferral();
+    await claimPendingChallenge();
     localStorage.setItem(linkKey,"1");
   }catch(e){console.warn("cloud sync failed",e)}
 }
@@ -548,7 +556,8 @@ function defaultState(bal){return{
   start:bal,cash:bal,youBase:bal,holdings:{},trades:[],equity:[[Date.now(),bal]],
   bots:{crypto:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0},
         stock:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0}},
-  orders:[],reserved:0,ach:{},custom:[],created:Date.now(),streak:{count:0,lastDay:null},leaderboardOptIn:false
+  orders:[],reserved:0,ach:{},custom:[],created:Date.now(),streak:{count:0,lastDay:null},leaderboardOptIn:false,
+  missions:{},flags:{}
 }}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,800)}
 function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S);if(sb&&cloudUser)pushCloud()}
@@ -763,6 +772,7 @@ async function createAlert(id,type,gecko){
   if(!sub)return toast("Enable notifications to use price alerts");
   try{
     await sb.from("price_alerts").insert({user_id:cloudUser.id,asset_id:id,asset_type:type,gecko_id:gecko||null,direction:alertDir,target});
+    if(S&&S.flags){S.flags.alertSet=true;scheduleSave()}
     toast(`🔔 We'll notify you when ${id} goes ${alertDir} ${fmt(target)}`);
     alertFormOpen=false;drawSheet();
   }catch(e){toast("Couldn't save that alert — try again")}
@@ -834,8 +844,24 @@ function drawSheet(){
      :["25","50","75","100"].map(v=>`<button onclick="setPct(${v})">${v}%</button>`).join("")}</div>
    <button class="cta ${sheetSide==="sell"?"sell":""}" id="doBtn" onclick="execute()" disabled>${orderType==="market"?(sheetSide==="buy"?"Buy":"Sell"):"Place order"} — ${a.id}</button>
    <div class="hint" id="tradeHint">${sheetSide==="buy"?`Cash available: <b>${fmt(S.cash)}</b> · fractional shares supported`
-     :`Position value: <b>${fmt(h.qty*p)}</b>`}${a.t==="stock"&&!marketOpen()?`<br><span style="color:var(--ink)">⏸ NYSE is closed — this fills at the last close price. A real order would queue until ${nextOpenText()}.</span>`:""}<br><span style="color:var(--gray-3)">Practice mode — real brokers charge fees &amp; spreads.</span></div>`;
-  drawSpark();
+     :`Position value: <b>${fmt(h.qty*p)}</b>`}${a.t==="stock"&&!marketOpen()?`<br><span style="color:var(--ink)">⏸ NYSE is closed — this fills at the last close price. A real order would queue until ${nextOpenText()}.</span>`:""}<br><span style="color:var(--gray-3)">Practice mode — real brokers charge fees &amp; spreads.</span></div>
+   <div id="newsBox"></div>`;
+  drawSpark();loadNews(a);
+}
+async function loadNews(a){
+  if(!sb||a.t!=="stock")return; // crypto news isn't per-coin on our data source
+  const forId=a.id;
+  let items=[];
+  try{const{data}=await sb.functions.invoke("stock-proxy",{body:{type:"news",q:a.id}});items=(data&&data.items)||[]}catch(e){}
+  const box=$("newsBox");
+  if(!box||!sheetAsset||sheetAsset.id!==forId||!items.length)return; // sheet moved on
+  const ago=ts=>{const h=Math.round((Date.now()/1000-ts)/3600);
+    return h<1?"just now":h<24?h+"h ago":Math.round(h/24)+"d ago"};
+  box.innerHTML=`<div class="label" style="margin:16px 0 6px 4px">Latest news</div>
+   <div class="card" style="padding:6px 16px">${items.map(n=>
+    `<a href="${esc(n.url)}" target="_blank" rel="noopener" class="log-item" style="display:block;text-decoration:none;color:inherit">
+       <b style="font-size:13px;line-height:1.4">${esc(n.headline||"")}</b>
+       <div class="log-time">${esc(n.source||"")} · ${ago(n.datetime)}</div></a>`).join("")}</div>`;
 }
 function setAmt(v){$("amt").value=v;amtChanged()}
 function setPct(pc){const h=S.holdings[sheetAsset.id]||{qty:0};
@@ -869,7 +895,8 @@ function execute(){
     h.cost-=h.cost*portion;h.qty-=sellQty;S.cash+=sellQty*p;
     if(h.qty<1e-9)delete S.holdings[a.id];
   }
-  S.trades.unshift({t:Date.now(),side:sheetSide,id:a.id,qty,price:p,val:v,who:"you"});
+  S.trades.unshift({t:Date.now(),side:sheetSide,id:a.id,qty,price:p,val:v,who:"you",
+    ...(sheetSide==="sell"?{pl:sellPL}:{})});
   if(S.trades.length>300)S.trades.pop();
   unlock("first_trade");bumpStreak();
   if(sheetSide==="buy"){
@@ -967,11 +994,17 @@ function renderPortfolio(){
   plEl.className="subnum "+(pl>=0?"pos":"neg");
   $("pfCash").textContent=fmt(S.cash);$("pfInv").textContent=fmt(inv);
   $("pfDay").textContent=Object.keys(S.holdings).length+" positions";
-  $("streakBanner").innerHTML=S.streak&&S.streak.count>0?
+  const nextMission=MISSIONS.find(([id,,,,check])=>!(S.missions&&S.missions[id]));
+  $("streakBanner").innerHTML=(S.streak&&S.streak.count>0?
     `<div class="card" style="display:flex;align-items:center;gap:10px;padding:14px 16px">
        <span style="font-size:24px">🔥</span>
        <div><div style="font-weight:700;font-size:15px">${S.streak.count}-day streak</div>
-       <div style="font-size:12px;color:var(--gray-4)">Trade today to keep it going</div></div></div>`:"";
+       <div style="font-size:12px;color:var(--gray-4)">Trade today to keep it going</div></div></div>`:"")
+   +(nextMission?`<div class="card" style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer" onclick="openMissions()">
+       <span style="font-size:24px">${nextMission[1]}</span>
+       <div style="flex:1"><div style="font-weight:700;font-size:15px">${nextMission[4]()?"Mission ready to claim!":"Next mission: "+nextMission[2]}</div>
+       <div style="font-size:12px;color:var(--gray-4)">${missionsDone()}/${MISSIONS.length} missions · ${fmt(MISSION_REWARD)} each</div></div>
+       <b style="color:var(--gray-3)">›</b></div>`:"");
   $("ordersWrap").innerHTML=S.orders&&S.orders.length?`<div class="label" style="margin:14px 0 10px 4px">Open orders</div>`+
     S.orders.map(o=>`<div class="row" style="cursor:default;padding:11px 16px">
       ${badgeHTML(o.id,(ASSETS.find(x=>x.id===o.id)||{}).t==="crypto","width:36px;height:36px;font-size:10px")}
@@ -1033,6 +1066,52 @@ async function sharePortfolioCard(){
     setTimeout(()=>URL.revokeObjectURL(url),4000);
     toast("Image saved — share it anywhere");
   },"image/png");
+}
+
+/* ================= INSIGHTS ================= */
+async function openInsights(){
+  const mine=S.trades.filter(t=>t.who==="you");
+  const sells=mine.filter(t=>t.side==="sell"&&typeof t.pl==="number");
+  const wins=sells.filter(t=>t.pl>0);
+  const counts={};mine.forEach(t=>counts[t.id]=(counts[t.id]||0)+1);
+  const fav=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  const best=sells.length?sells.reduce((a,b)=>a.pl>b.pl?a:b):null;
+  const worst=sells.length?sells.reduce((a,b)=>a.pl<b.pl?a:b):null;
+  const statRow=(l,v,cls)=>`<div class="settings-row"><span>${l}</span><b style="font-family:var(--mono)" class="${cls||""}">${v}</b></div>`;
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">📊 Your Insights</h2>
+   <p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">What your own trading history says — the honest mirror most apps won't show you.</p>
+   ${statRow("Trades made by you",mine.length)}
+   ${fav?statRow("Most traded",fav[0]+" ("+fav[1]+"×)"):""}
+   ${sells.length?statRow("Win rate on sells",Math.round(wins.length/sells.length*100)+"% ("+wins.length+"/"+sells.length+")",wins.length/sells.length>=.5?"pos":"neg"):""}
+   ${best?statRow("Best sell",best.id+" "+(best.pl>=0?"+":"")+fmt(best.pl).replace("$-","-$"),best.pl>=0?"pos":"neg"):""}
+   ${worst&&worst!==best?statRow("Worst sell",worst.id+" "+(worst.pl>=0?"+":"")+fmt(worst.pl).replace("$-","-$"),worst.pl>=0?"pos":"neg"):""}
+   <div id="benchBox" style="margin-top:12px"><div class="empty" style="padding:14px">Computing your buy-and-hold benchmark…</div></div>
+   ${!sells.length?`<div class="empty" style="padding:14px;margin-top:6px">Sell something and your win rate, best and worst trades will show up here.</div>`:""}`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+  renderBenchmark();
+}
+async function renderBenchmark(){
+  const box=$("benchBox");if(!box)return;
+  try{
+    const d=new Date(S.created),dd=String(d.getDate()).padStart(2,"0"),
+      mm=String(d.getMonth()+1).padStart(2,"0"),yyyy=d.getFullYear();
+    const ageDays=(Date.now()-S.created)/86400000;
+    if(ageDays<1){box.innerHTML=`<div class="empty" style="padding:14px">The buy-and-hold benchmark unlocks once your account is a day old.</div>`;return}
+    const r=await fetch(`https://api.coingecko.com/api/v3/coins/bitcoin/history?date=${dd}-${mm}-${yyyy}`);
+    const j=await r.json();
+    const btcThen=j&&j.market_data&&j.market_data.current_price&&j.market_data.current_price.usd;
+    const btcNow=prices.BTC;
+    if(!btcThen||!btcNow)throw 0;
+    if(!$("benchBox"))return;
+    const bench=S.start*btcNow/btcThen,tv=youValue(),ahead=tv>=bench;
+    $("benchBox").innerHTML=`<div class="card" style="padding:14px 16px">
+      <div class="label" style="margin-bottom:6px">The humbling benchmark</div>
+      <div style="font-size:13px;line-height:1.6">If you'd put your starting ${fmt(S.start)} all in Bitcoin on day one and never touched it, you'd have
+        <b style="font-family:var(--mono)">${fmt(bench)}</b> — you have <b style="font-family:var(--mono)" class="${ahead?"pos":"neg"}">${fmt(tv)}</b>.
+        ${ahead?"You're beating buy-and-hold. Genuinely rare — nice.":"Buy-and-hold is winning so far. That's the norm, not a failure — most active traders lose to it."}</div></div>`;
+  }catch(e){
+    if($("benchBox"))$("benchBox").innerHTML=`<div class="empty" style="padding:14px">Couldn't fetch the benchmark right now — try again later.</div>`;
+  }
 }
 
 /* ================= ACTIVITY ================= */
@@ -1105,6 +1184,8 @@ function openSettings(){
        <button class="chip" onclick="newProfile()">＋ New profile</button></div>
    </div>
    <button class="settings-row" style="width:100%;text-align:left" onclick="openGlossary()"><span>📖 Trading glossary</span><b>›</b></button>
+   <button class="settings-row" style="width:100%;text-align:left" onclick="openMissions()"><span>🎯 Missions</span><b>›</b></button>
+   <button class="settings-row" style="width:100%;text-align:left" onclick="openTimeMachine()"><span>🕰 Time Machine</span><b>›</b></button>
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openMyAlerts()"><span>🔔 My price alerts</span><b>›</b></button>`:""}
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openInviteSheet()"><span>🎁 Invite a friend</span><b>›</b></button>`:""}
    <div class="settings-row" style="display:block">
@@ -1118,7 +1199,9 @@ function openSettings(){
   $("overlay").classList.add("show");$("sheet").classList.add("show");
 }
 function getTheme(){return localStorage.getItem("ppt-theme")||"light"}
-function setTheme(t){localStorage.setItem("ppt-theme",t);document.documentElement.setAttribute("data-theme",t);openSettings()}
+function setTheme(t){localStorage.setItem("ppt-theme",t);document.documentElement.setAttribute("data-theme",t);
+  if(t==="dark"&&S&&S.flags){S.flags.triedDark=true;scheduleSave()}
+  openSettings()}
 function resetAll(){
   if(!confirm("Delete profile '"+profiles.active+"'? Its portfolio, bots and history will be wiped."))return;
   store.set("ppt-state:"+profiles.active,null);
@@ -1213,6 +1296,9 @@ function renderBotSection(k){
      ${Object.entries(BOT_STRATS[k]).map(([sk,s])=>`
        <div class="strat ${sk===botPick[k]?"on":""}" onclick="botPick['${k}']='${sk}';renderBot()">
          <div class="dot"></div><div><b>${s.ic} ${s.name}</b><p>${s.desc}</p></div></div>`).join("")}
+     <div class="strat ${botPick[k]==="custom"?"on":""}" onclick="botPick['${k}']='custom';renderBot()">
+       <div class="dot"></div><div><b>🛠 Build your own</b><p>Pick your own assets, risk level, and profit/loss targets — then watch your strategy run.</p></div></div>
+     ${botPick[k]==="custom"?customBuilderHTML(k):""}
      <button onclick="openGlossary('Dollar-cost averaging')"
        style="display:block;margin:2px 0 12px;font-size:12px;color:var(--gray-4);text-decoration:underline">Not sure what these mean? ⓘ</button>
      <div class="budget-box">
@@ -1230,7 +1316,7 @@ function renderBotSection(k){
      ${k==="stock"&&!open?`<div style="font-size:12px;color:var(--gray-4);margin-bottom:12px">⏸ NYSE is closed right now — you can activate it, and it will start trading ${nextOpenText()}.</div>`:""}
      <button class="cta" style="padding:14px" onclick="startBot('${k}')">Activate ${meta.label.toLowerCase()}</button></div>`;
   }else{
-    const v=botValue(k),pl=v-b.start,plp=b.start?pl/b.start*100:0,st=BOT_STRATS[k][b.strategy],holds=Object.keys(b.holdings);
+    const v=botValue(k),pl=v-b.start,plp=b.start?pl/b.start*100:0,st=botStratLabel(k),holds=Object.keys(b.holdings);
     el.innerHTML=head+`
      <div class="card dark">
        <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1257,13 +1343,63 @@ function renderBotSection(k){
   }
 }
 function setBotBudgetPct(k,pct){$("budget-"+k).value=Math.max(0,Math.floor(S.cash*pct/100))}
+
+/* --- custom bot builder --- */
+const CUSTOM_BRAINS=[["steady","🐢 Steady","Buys whichever of your picks you own least of, on a schedule"],
+ ["dip","🎯 Dips","Buys whichever pick has fallen furthest below its recent average"],
+ ["degen","🚀 Momentum","Chases whichever pick is rising fastest"]];
+const customCfg={crypto:{brain:"steady",pool:["BTC","ETH"],risk:10,tp:10,sl:8},
+                 stock:{brain:"steady",pool:["AAPL","MSFT"],risk:10,tp:10,sl:8}};
+function setCustomCfg(k,field,val){customCfg[k][field]=val;renderBot()}
+function toggleCustomPool(k,id){
+  const p=customCfg[k].pool,i=p.indexOf(id);
+  if(i>=0)p.splice(i,1);else{if(p.length>=10)return toast("Max 10 picks per bot");p.push(id)}
+  renderBot();
+}
+function customBuilderHTML(k){
+  const c=customCfg[k];
+  const opts=ASSETS.filter(a=>k==="crypto"?a.t==="crypto":a.t==="stock");
+  const segRow=(label,field,choices)=>`<div class="label" style="margin:10px 0 6px">${label}</div>
+    <div class="seg" style="margin:0">${choices.map(([v,l])=>
+      `<button class="${c[field]===v?"on":""}" onclick="setCustomCfg('${k}','${field}',${v===null?"null":typeof v==="string"?`'${v}'`:v})">${l}</button>`).join("")}</div>`;
+  return`<div class="budget-box" style="margin:2px 0 10px">
+    <div class="label" style="margin-bottom:6px">Brain — how it decides what to buy</div>
+    <div class="seg" style="margin:0 0 4px">${CUSTOM_BRAINS.map(([v,l])=>
+      `<button class="${c.brain===v?"on":""}" onclick="setCustomCfg('${k}','brain','${v}')">${l}</button>`).join("")}</div>
+    <div style="font-size:11px;color:var(--gray-4);margin-bottom:4px">${CUSTOM_BRAINS.find(x=>x[0]===c.brain)[2]}. Sells any pick at the profit target or stop-loss below.</div>
+    <div class="label" style="margin:10px 0 6px">Picks (${c.pool.length}/10)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:132px;overflow-y:auto;padding:2px 0">
+      ${opts.map(a=>`<button class="chip ${c.pool.includes(a.id)?"on":""}" style="padding:7px 12px;font-size:12px"
+        onclick="toggleCustomPool('${k}','${a.id}')">${a.id}</button>`).join("")}
+    </div>
+    ${segRow("Risk per trade","risk",[[5,"5%"],[10,"10%"],[15,"15%"],[20,"20%"]])}
+    ${segRow("Take profit at","tp",[[5,"+5%"],[10,"+10%"],[20,"+20%"],[0,"Off"]])}
+    ${segRow("Stop loss at","sl",[[5,"−5%"],[8,"−8%"],[12,"−12%"],[0,"Off"]])}
+  </div>`;
+}
 function startBot(k){
   const v=parseFloat($("budget-"+k).value)||0;
   if(v<=0)return toast("Enter a bot budget");
   if(v>S.cash)return toast("Not enough cash for that budget");
+  let custom=null;
+  if(botPick[k]==="custom"){
+    const c=customCfg[k];
+    if(!c.pool.length)return toast("Pick at least one asset for your bot");
+    const geckoMap={};
+    c.pool.forEach(id=>{const a=ASSETS.find(x=>x.id===id);if(a&&a.gecko)geckoMap[id]=a.gecko});
+    custom={brain:c.brain,pool:[...c.pool],geckoMap,risk:c.risk/100,tp:c.tp||null,sl:c.sl?-c.sl:null,every:30};
+  }
   S.cash-=v;S.youBase=Math.max(1,S.youBase-v);
-  S.bots[k]={active:true,strategy:botPick[k],cash:v,start:v,holdings:{},log:[],lastAct:0};
+  S.bots[k]={active:true,strategy:botPick[k],custom,cash:v,start:v,holdings:{},log:[],lastAct:0};
   unlock("bot_boss");scheduleSave();renderBot();toast(BOT_META[k].label+" activated 🤖");
+}
+function botStratLabel(k){
+  const b=S.bots[k];
+  if(b.strategy==="custom"){
+    const brainName={steady:"Steady",dip:"Dip",degen:"Momentum"}[(b.custom||{}).brain]||"";
+    return{ic:"🛠",name:`Custom ${brainName} Bot`};
+  }
+  return BOT_STRATS[k][b.strategy]||{ic:"🤖",name:"Bot"};
 }
 function stopBot(k){
   const b=S.bots[k];
@@ -1279,7 +1415,9 @@ function sma(id,n){const h=hist[id];if(h.length<2)return prices[id];
 function botThink(k){
   const b=S.bots[k];if(!b||!b.active)return;
   if(k==="stock"&&!marketOpen())return; // prices frozen, nothing to do
-  const st=BOT_STRATS[k][b.strategy],now=Date.now();
+  const st=b.strategy==="custom"?b.custom:BOT_STRATS[k][b.strategy],now=Date.now();
+  if(!st||!st.pool||!st.pool.length)return;
+  const brain=b.strategy==="custom"?(st.brain||"steady"):b.strategy;
   for(const id in {...b.holdings}){
     const h=b.holdings[id],p=prices[id];
     const plp=(p*h.qty-h.cost)/h.cost*100;
@@ -1290,11 +1428,11 @@ function botThink(k){
   const budget=Math.min(b.cash,botValue(k)*st.risk);
   if(budget<5)return;
   let pick=null,why="";
-  if(b.strategy==="steady"){
+  if(brain==="steady"){
     const pool=st.pool.map(id=>({id,val:(b.holdings[id]?b.holdings[id].qty*prices[id]:0)}));
     pool.sort((a,b2)=>a.val-b2.val);pick=pool[0].id;
     why=`Scheduled buy — dollar-cost averaging means investing steadily regardless of price, which smooths out timing risk over time.`;
-  }else if(b.strategy==="dip"){
+  }else if(brain==="dip"){
     let best=null,bestGap=0;
     st.pool.forEach(id=>{const gap=(sma(id,20)-prices[id])/sma(id,20)*100;
       if(gap>bestGap){bestGap=gap;best=id}});
@@ -1350,7 +1488,8 @@ const ACH=[
  ["whale","🐋","Whale","Grew your account +25%"],
  ["streak_3","🔥","On a Roll","Traded 3 days in a row"],
  ["streak_7","🔥","Week Warrior","Traded 7 days in a row"],
- ["streak_30","🔥","Unstoppable","Traded 30 days in a row"]];
+ ["streak_30","🔥","Unstoppable","Traded 30 days in a row"],
+ ["time_traveler","🕰","Time Traveler","Completed a Time Machine replay"]];
 function unlock(id){
   if(!S||!S.ach||S.ach[id])return;
   S.ach[id]=Date.now();scheduleSave();
@@ -1369,6 +1508,126 @@ function bumpStreak(){
   if(S.streak.count===7)unlock("streak_7");
   if(S.streak.count===30)unlock("streak_30");
 }
+
+/* ================= GUIDED MISSIONS ================= */
+const MISSION_REWARD=250;
+const MISSIONS=[
+ ["m_trade","🎯","Make your first trade","Open any asset from Markets and buy any amount.",()=>S.trades.some(t=>t.who==="you")],
+ ["m_own3","🧺","Hold 3 assets at once","Diversify — spread your cash across three different things.",()=>Object.keys(S.holdings).length>=3],
+ ["m_order","⏳","Place a limit or stop order","In the trade sheet, switch from Market to Limit and set a target price.",()=>!!(S.ach&&S.ach.order_up)||(S.orders&&S.orders.length>0)],
+ ["m_bot","🤖","Activate a trading bot","Head to the Bot tab and put a strategy to work.",()=>!!(S.ach&&S.ach.bot_boss)],
+ ["m_help","🎓","Read the beginner guide","Tap the ? button and skim what's in there.",()=>!!(S.flags&&S.flags.readHelp)],
+ ["m_dark","🌙","Try dark mode","Settings → Appearance. Easier on the eyes at night.",()=>!!(S.flags&&S.flags.triedDark)],
+ ["m_streak","🔥","Trade 3 days in a row","Come back and make at least one trade a day.",()=>S.streak&&S.streak.count>=3],
+ ["m_cloud","☁️","Sync to the cloud","Sign in under Settings so your progress follows you anywhere.",()=>!!cloudUser],
+ ["m_alert","🔔","Set a price alert","Tap the bell on any asset and pick a target price.",()=>!!(S.flags&&S.flags.alertSet)],
+ ["m_tm","🕰","Complete a Time Machine run","Replay the last year of a coin's real prices — Settings → Time Machine.",()=>!!(S.flags&&S.flags.timeMachine)]];
+function missionsDone(){return MISSIONS.filter(([id])=>S.missions&&S.missions[id]).length}
+function claimMission(id){
+  const m=MISSIONS.find(x=>x[0]===id);
+  if(!m||!m[4]()||(S.missions&&S.missions[id]))return;
+  S.missions[id]=Date.now();
+  S.cash+=MISSION_REWARD;S.start+=MISSION_REWARD;S.youBase+=MISSION_REWARD;
+  scheduleSave();
+  toast(`${m[1]} Mission complete: +${fmt(MISSION_REWARD)}`);
+  openMissions();
+}
+function openMissions(){
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🎯 Missions</h2>
+   <p style="font-size:12px;color:var(--gray-4);margin-bottom:12px">Learn the ropes step by step — each completed mission deposits ${fmt(MISSION_REWARD)} into your account. ${missionsDone()}/${MISSIONS.length} done.</p>
+   ${MISSIONS.map(([id,ic,title,desc,check])=>{
+     const claimed=S.missions&&S.missions[id],ready=!claimed&&check();
+     return`<div class="log-item" style="${claimed?"opacity:.45":""}">
+       <div style="display:flex;align-items:center;gap:10px">
+         <span style="font-size:20px">${ic}</span>
+         <div style="flex:1"><b>${title}</b><div class="why">${desc}</div></div>
+         ${claimed?`<span class="pill">DONE ✓</span>`
+           :ready?`<button class="chip on" style="flex-shrink:0" onclick="claimMission('${id}')">Claim ${fmt(MISSION_REWARD)}</button>`
+           :`<span class="pill" style="opacity:.6">To do</span>`}
+       </div></div>`}).join("")}`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+
+/* ================= TIME MACHINE ================= */
+let tm=null,tmTimer=null;
+function stopTmTimer(){if(tmTimer){clearInterval(tmTimer);tmTimer=null}}
+function openTimeMachine(){
+  stopTmTimer();tm=null;
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🕰 Time Machine</h2>
+   <p style="font-size:13px;color:var(--gray-4);margin-bottom:12px;line-height:1.5">Replay the last 12 months of real prices with $10,000 of practice money — one day per beat. Would you have held your nerve? Pick a coin:</p>
+   <div class="chips" style="justify-content:center">${["BTC","ETH","SOL"].map(id=>
+     `<button class="chip" onclick="startTimeMachine('${id}')">${id}</button>`).join("")}</div>
+   <div id="tmBody"></div>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+async function startTimeMachine(id){
+  stopTmTimer();
+  $("tmBody").innerHTML=`<div class="empty" style="padding:18px">Winding the clock back…</div>`;
+  const a=ASSETS.find(x=>x.id===id);
+  try{
+    const r=await fetch(`https://api.coingecko.com/api/v3/coins/${a.gecko}/market_chart?vs_currency=usd&days=365&interval=daily`);
+    const j=await r.json();
+    const pts=(j.prices||[]).filter((_,i)=>i%3===0).map(p=>({t:p[0],p:p[1]}));
+    if(pts.length<30)throw 0;
+    if(!$("tmBody"))return;
+    tm={asset:id,data:pts,idx:4,cash:10000,qty:0,startIdx:4,done:false,playing:true,trades:0};
+    renderTm();
+    tmTimer=setInterval(tmTick,450);
+  }catch(e){
+    if($("tmBody"))$("tmBody").innerHTML=`<div class="empty" style="padding:18px">Couldn't fetch price history right now — try again in a minute.</div>`;
+  }
+}
+function tmTick(){
+  if(!tm||!$("tmChart")){stopTmTimer();return} // sheet closed or replaced
+  if(!tm.playing||tm.done)return;
+  tm.idx++;
+  if(tm.idx>=tm.data.length-1)finishTm();
+  renderTm();
+}
+function tmTrade(){
+  if(!tm||tm.done)return;
+  const p=tm.data[tm.idx].p;
+  if(tm.qty>0){tm.cash=tm.qty*p;tm.qty=0}else{tm.qty=tm.cash/p;tm.cash=0}
+  tm.trades++;renderTm();
+}
+function tmToggle(){if(tm){tm.playing=!tm.playing;renderTm()}}
+function finishTm(){
+  tm.done=true;tm.playing=false;stopTmTimer();
+  if(S){if(S.flags&&!S.flags.timeMachine){S.flags.timeMachine=true}unlock("time_traveler");scheduleSave()}
+}
+function renderTm(){
+  const box=$("tmBody");if(!box||!tm)return;
+  const d=tm.data,i=tm.idx,p=d[i].p,total=tm.cash+tm.qty*p;
+  const bh=10000*d[d.length-1].p/d[tm.startIdx].p;
+  const dateStr=new Date(d[i].t).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+  box.innerHTML=`
+   <div class="card dark" style="margin-top:12px">
+     <div style="display:flex;justify-content:space-between;align-items:baseline">
+       <div><div class="label">${tm.asset} · ${dateStr}</div>
+         <div class="bignum" style="font-size:26px">${fmt(p)}</div></div>
+       <div style="text-align:right"><div class="label">Your total</div>
+         <div style="font-family:var(--mono);font-weight:700;font-size:20px" class="${total>=10000?"pos":"neg"}">${fmt(total)}</div></div>
+     </div>
+     <canvas id="tmChart" height="100" style="margin-top:10px"></canvas>
+   </div>
+   ${tm.done?`
+   <div class="card" style="padding:16px">
+     <b>⏰ Time's up!</b>
+     <div style="font-size:13px;line-height:1.7;margin-top:6px">
+       You finished with <b style="font-family:var(--mono)" class="${total>=10000?"pos":"neg"}">${fmt(total)}</b> (${tm.trades} trade${tm.trades===1?"":"s"}).<br>
+       Just buying and holding the whole year: <b style="font-family:var(--mono)">${fmt(bh)}</b>.<br>
+       <span style="color:var(--gray-4)">${total>=bh?"You beat buy-and-hold — genuinely hard to do. 🏆":"Buy-and-hold won this round — timing the market is harder than it looks, and that's the lesson."}</span>
+     </div></div>
+   <button class="cta" style="padding:13px" onclick="openTimeMachine()">Run it again</button>`
+   :`
+   <div style="display:flex;gap:8px;margin-top:10px">
+     <button class="cta" style="flex:1;padding:13px" onclick="tmTrade()">${tm.qty>0?"Sell everything":"Go all in"}</button>
+     <button class="cta sell" style="width:90px;padding:13px" onclick="tmToggle()">${tm.playing?"⏸":"▶️"}</button>
+   </div>
+   <div class="hint">${tm.qty>0?`Holding ${fmtQty(tm.qty)} ${tm.asset}`:`Sitting in cash — the market doesn't wait`}</div>`}`;
+  drawLine($("tmChart"),d.slice(tm.startIdx,i+1).map(x=>x.p),total>=10000?"#00E561":"#FF6B61");
+}
+
 const GLOSSARY=[
  ["Market order","Buys or sells immediately at the current price. Fast, but you take whatever price the market gives you."],
  ["Limit order","An order that only fills at your chosen price or better. Buy limits fill when the price drops to your target; sell limits when it rises."],
@@ -1409,6 +1668,7 @@ function helpJump(id){
   setTimeout(()=>{el.style.background="";el.style.padding=""},2200);
 }
 function openHelpGuide(){
+  if(S&&S.flags&&!S.flags.readHelp){S.flags.readHelp=true;scheduleSave()}
   $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🎓 New here? Start here.</h2>
    <p style="font-size:13px;color:var(--gray-4);margin-bottom:10px;line-height:1.5">A quick, no-jargon rundown of what this app is, plus general education on a few real-world basics that trip people up.</p>
    <div class="chips" style="padding:2px 0 14px">${HELP_TOPICS.map(([id,l])=>`<button class="chip" onclick="helpJump('${id}')">${l}</button>`).join("")}</div>
@@ -1508,9 +1768,10 @@ function checkOrders(){
       const h=S.holdings[o.id];
       if(!h||h.qty<1e-9){filled.push(o.o);return}
       const qty=Math.min(o.qty,h.qty),fill=p,val=qty*fill;
-      const portion=qty/h.qty;h.cost-=h.cost*portion;h.qty-=qty;S.cash+=val;
+      const portion=qty/h.qty,fillPL=val-h.cost*portion;
+      h.cost-=h.cost*portion;h.qty-=qty;S.cash+=val;
       if(h.qty<1e-9)delete S.holdings[o.id];
-      S.trades.unshift({t:Date.now(),side:"sell",id:o.id,qty,price:fill,val,who:"you",note:o.type});
+      S.trades.unshift({t:Date.now(),side:"sell",id:o.id,qty,price:fill,val,who:"you",note:o.type,pl:fillPL});
       filled.push(o.o);unlock("order_up");bumpStreak();
       toast(`${o.type==="stop"?"🛑 Stop-loss":"⏳ Limit"} filled: sold ${o.id} @ ${fmt(fill)}`);
     }
@@ -1619,6 +1880,7 @@ function migrateState(){
   if(!S.custom)S.custom=[];
   if(!S.orders)S.orders=[];if(S.reserved===undefined)S.reserved=0;if(!S.ach)S.ach={};
   if(S.email===undefined)S.email="";if(!S.level)S.level="some";
+  if(!S.missions)S.missions={};if(!S.flags)S.flags={};
   if(!S.streak)S.streak={count:0,lastDay:null};
   if(S.leaderboardOptIn===undefined)S.leaderboardOptIn=false;
   S.custom.forEach(a=>{if(!ASSETS.some(x=>x.id===a.id))registerAsset(a)});
@@ -1677,12 +1939,36 @@ function setLbTab(t){lbTab=t;openLeaderboard()}
 async function openLeaderboard(){
   $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🏆 Leaderboard</h2>
    <div class="seg" style="margin:10px 0 4px">
-     <button class="${lbTab==="device"?"on":""}" onclick="setLbTab('device')">This device</button>
+     <button class="${lbTab==="device"?"on":""}" onclick="setLbTab('device')">Device</button>
      <button class="${lbTab==="global"?"on":""}" onclick="setLbTab('global')">Everyone</button>
+     <button class="${lbTab==="bots"?"on":""}" onclick="setLbTab('bots')">Bots</button>
+     <button class="${lbTab==="duels"?"on":""}" onclick="setLbTab('duels')">Duels</button>
    </div>
    <div id="lbBody"><div class="empty" style="padding:18px">Loading…</div></div>`;
   $("overlay").classList.add("show");$("sheet").classList.add("show");
-  if(lbTab==="device")renderDeviceLeaderboard();else renderGlobalLeaderboard();
+  if(lbTab==="device")renderDeviceLeaderboard();
+  else if(lbTab==="bots")renderBotLeaderboard();
+  else if(lbTab==="duels")renderChallenges();
+  else renderGlobalLeaderboard();
+}
+async function renderBotLeaderboard(){
+  if(!$("lbBody"))return;
+  if(!sb){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Cloud sync isn't available right now.</div>`;return}
+  let data=null;
+  try{const r=await sb.from("leaderboard_public").select("*")
+    .not("leaderboard_bot_return_pct","is",null)
+    .order("leaderboard_bot_return_pct",{ascending:false}).limit(50);data=r.data}catch(e){}
+  if(!$("lbBody"))return;
+  if(!data){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Couldn't load the bot leaderboard right now.</div>`;return}
+  const medals=["🥇","🥈","🥉"];
+  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Whose bot is winning — ranked by the bots' own return, with the strategy they're running.</p>
+   ${data.length?data.map((r,i)=>{const me=cloudUser&&r.id===cloudUser.id,pct=r.leaderboard_bot_return_pct||0;
+     return`<div class="row" style="cursor:default;${me?"border-color:var(--ink)":""}">
+       <div style="font-size:20px;width:32px;text-align:center">${medals[i]||(i+1)}</div>
+       <div class="row-mid"><div class="row-name">${esc(r.display_name)}${me?" (you)":""}</div>
+         <div class="row-sub">${esc(r.leaderboard_bot_label||"Bot")}</div></div>
+       <div class="row-right"><div class="row-chg ${pct>=0?"pos":"neg"}" style="font-size:15px">${pct>=0?"+":""}${pct.toFixed(2)}%</div></div></div>`}).join("")
+     :`<div class="empty" style="padding:18px">No bots on the board yet — activate one under the Bot tab and opt into the leaderboard in ⚙ Settings.</div>`}`;
 }
 async function renderDeviceLeaderboard(){
   const rows=[];
@@ -1719,6 +2005,60 @@ async function renderGlobalLeaderboard(){
        <div class="row-right"><div class="row-chg ${(r.leaderboard_return_pct||0)>=0?"pos":"neg"}" style="font-size:15px">${(r.leaderboard_return_pct||0)>=0?"+":""}${(r.leaderboard_return_pct||0).toFixed(2)}%</div></div></div>`}).join("")
      :`<div class="empty" style="padding:18px">No one's opted in yet — be the first! Turn it on in ⚙ Settings → Cloud Sync.</div>`}`;
 }
+
+/* ================= HEAD-TO-HEAD CHALLENGES ================= */
+async function renderChallenges(){
+  if(!$("lbBody"))return;
+  if(!sb||!cloudUser){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Sign in under ⚙ Settings → Cloud Sync to challenge friends.</div>`;return}
+  let data=[];
+  try{const r=await sb.from("challenges").select("*")
+    .or(`challenger.eq.${cloudUser.id},opponent.eq.${cloudUser.id}`)
+    .order("created_at",{ascending:false}).limit(10);data=r.data||[]}catch(e){}
+  if(!$("lbBody"))return;
+  const myPct=S&&S.start?(youValue()-S.start)/S.start*100:0;
+  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Challenge a friend: 7 days, biggest return gain wins. Bragging rights only — it's all fake money.</p>
+   <button class="cta" style="padding:13px;margin-bottom:12px" onclick="createChallenge()">⚔️ New challenge link</button>
+   ${data.length?data.map(ch=>{
+     const iAmChallenger=ch.challenger===cloudUser.id;
+     const them=iAmChallenger?(ch.opponent_name||"?"):ch.challenger_name;
+     if(ch.status==="open")return`<div class="log-item"><b>⏳ Waiting for someone to accept</b>
+       <div class="why">Share your link — the clock starts when a friend takes it.</div></div>`;
+     if(ch.status==="active"){
+       const myBase=iAmChallenger?(ch.challenger_start_pct??0):(ch.opponent_start_pct??0);
+       const daysLeft=Math.max(0,Math.ceil((new Date(ch.ends_at)-Date.now())/86400000));
+       const myDelta=myPct-myBase;
+       return`<div class="log-item"><b>⚔️ vs ${esc(them)}</b>
+         <div class="why">You're ${myDelta>=0?"up":"down"} ${Math.abs(myDelta).toFixed(2)}% since it started · ${daysLeft} day${daysLeft===1?"":"s"} left</div></div>`;
+     }
+     const won=ch.winner===cloudUser.id,tie=!ch.winner;
+     return`<div class="log-item"><b>${tie?"🤝 Tie":won?"🏆 Won":"💀 Lost"} vs ${esc(them)}</b>
+       <div class="log-time">${new Date(ch.created_at).toLocaleDateString()}</div></div>`;
+   }).join(""):`<div class="empty" style="padding:14px">No duels yet — create a link and send it to a friend.</div>`}`;
+}
+async function createChallenge(){
+  if(!sb||!cloudUser)return toast("Sign in first");
+  try{
+    const{data,error}=await sb.from("challenges")
+      .insert({challenger:cloudUser.id,challenger_name:profiles.active||"Trader"}).select().single();
+    if(error)throw error;
+    const link=location.origin+location.pathname+"?challenge="+data.id;
+    if(navigator.share){
+      try{await navigator.share({title:"PaperTrade duel",text:"7 days, fake money, best return wins. Accept my challenge:",url:link});renderChallenges();return}catch(e){}
+    }
+    navigator.clipboard.writeText(link);toast("Challenge link copied — send it to a friend");
+    renderChallenges();
+  }catch(e){toast("Couldn't create the challenge — try again")}
+}
+async function claimPendingChallenge(){
+  const id=localStorage.getItem("ppt-pending-challenge");
+  if(!id||!sb||!cloudUser)return;
+  try{
+    const{data,error}=await sb.functions.invoke("challenge-accept",
+      {body:{challenge_id:id,opponent_id:cloudUser.id,opponent_name:profiles.active||"Trader"}});
+    if(!error&&data&&data.ok)toast("⚔️ Challenge accepted — 7 days on the clock!");
+  }catch(e){}
+  localStorage.removeItem("ppt-pending-challenge");
+}
 async function init(){
   buildChips();
   const p=await store.get("ppt-profiles");
@@ -1748,8 +2088,11 @@ function boot(){
   updateMktPill();setInterval(updateMktPill,20000);
 }
 (function captureReferral(){
-  const ref=new URLSearchParams(location.search).get("ref");
+  const params=new URLSearchParams(location.search);
+  const ref=params.get("ref");
   if(ref)localStorage.setItem("ppt-pending-ref",ref);
+  const ch=params.get("challenge");
+  if(ch)localStorage.setItem("ppt-pending-challenge",ch);
 })();
 init();
 </script>

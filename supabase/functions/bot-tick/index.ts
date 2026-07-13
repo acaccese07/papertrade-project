@@ -118,6 +118,21 @@ function pickForStrategy(stratKey: string, strat: Strat, prices: Record<string, 
   return best ? { pick: best, why: `${best} has the strongest 24h momentum (+${bestMom.toFixed(2)}%). Momentum traders bet that what's moving keeps moving — until it doesn't.` } : { pick: null, why: "" };
 }
 
+// Custom (user-built) strategies arrive as untrusted JSON inside the state
+// blob -- clamp everything to sane ranges rather than trusting the client.
+function sanitizeCustom(c: any): (Strat & { brain: string }) | null {
+  if (!c || !Array.isArray(c.pool) || !c.pool.length) return null;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return {
+    brain: ["steady", "dip", "degen"].includes(c.brain) ? c.brain : "steady",
+    pool: c.pool.filter((x: unknown) => typeof x === "string").slice(0, 10),
+    risk: clamp(+c.risk || .08, .01, .3),
+    tp: c.tp ? clamp(+c.tp, 3, 50) : null,
+    sl: c.sl ? clamp(+c.sl, -20, -3) : null,
+    every: clamp(+c.every || 30, 20, 3600),
+  };
+}
+
 function buy(bot: any, state: any, k: string, id: string, val: number, why: string, price: number) {
   if (val > bot.cash) val = bot.cash;
   if (val < 1) return;
@@ -150,12 +165,28 @@ Deno.serve(async (_req) => {
   const { data: rows, error } = await admin.from("profiles").select("id, state");
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
-  const cryptoIds = [...new Set(Object.values(BOT_STRATS.crypto).flatMap((s) => s.pool))];
-  const stockIds = [...new Set(Object.values(BOT_STRATS.stock).flatMap((s) => s.pool))];
+  // preset pools plus whatever symbols users' custom bots reference; custom
+  // crypto bots carry their own symbol->coingecko-id map (geckoMap) since the
+  // server's static GECKO_ID only covers the preset pools
+  const cryptoIds = new Set(Object.values(BOT_STRATS.crypto).flatMap((s) => s.pool));
+  const stockIds = new Set(Object.values(BOT_STRATS.stock).flatMap((s) => s.pool));
+  for (const row of rows ?? []) {
+    const bots = (row.state as any)?.bots;
+    for (const k of ["crypto", "stock"] as const) {
+      const bot = bots?.[k];
+      if (!bot?.active || bot.strategy !== "custom" || !Array.isArray(bot.custom?.pool)) continue;
+      for (const id of bot.custom.pool.slice(0, 10)) {
+        if (typeof id !== "string") continue;
+        (k === "crypto" ? cryptoIds : stockIds).add(id);
+        const g = bot.custom.geckoMap?.[id];
+        if (k === "crypto" && typeof g === "string") GECKO_ID[id] = g;
+      }
+    }
+  }
   const isOpen = marketOpen();
   const [cryptoPrices, stockPrices] = await Promise.all([
-    fetchCryptoPrices(cryptoIds),
-    isOpen ? fetchStockPrices(stockIds) : Promise.resolve({}),
+    fetchCryptoPrices([...cryptoIds]),
+    isOpen ? fetchStockPrices([...stockIds]) : Promise.resolve({}),
   ]);
 
   let processed = 0;
@@ -168,8 +199,9 @@ Deno.serve(async (_req) => {
       const bot = state.bots[k];
       if (!bot?.active) continue;
       if (k === "stock" && !isOpen) continue;
-      const strat = BOT_STRATS[k][bot.strategy];
+      const strat = bot.strategy === "custom" ? sanitizeCustom(bot.custom) : BOT_STRATS[k][bot.strategy];
       if (!strat) continue;
+      const brain = bot.strategy === "custom" ? (strat as any).brain : bot.strategy;
       const prices = k === "crypto" ? cryptoPrices : stockPrices;
 
       for (const id of Object.keys({ ...bot.holdings })) {
@@ -190,7 +222,7 @@ Deno.serve(async (_req) => {
       const botVal = bot.cash + Object.entries(bot.holdings || {}).reduce((s, [id, h]: [string, any]) => s + h.qty * (prices[id]?.price || 0), 0);
       const budget = Math.min(bot.cash, botVal * strat.risk);
       if (budget < 5) continue;
-      const { pick, why } = pickForStrategy(bot.strategy, strat, prices, bot.holdings || {});
+      const { pick, why } = pickForStrategy(brain, strat, prices, bot.holdings || {});
       if (!pick || !prices[pick]) continue;
       bot.lastAct = now;
       buy(bot, state, k, pick, budget, why, prices[pick].price);
@@ -204,11 +236,82 @@ Deno.serve(async (_req) => {
   }
 
   const alertsFired = await checkPriceAlerts(admin, cryptoPrices, stockPrices, isOpen);
+  const challengesResolved = await resolveChallenges(admin);
+  const recapsSent = await weeklyRecap(admin);
 
-  return new Response(JSON.stringify({ ok: true, accounts: (rows ?? []).length, processed, alertsFired }), {
+  return new Response(JSON.stringify({ ok: true, accounts: (rows ?? []).length, processed, alertsFired, challengesResolved, recapsSent }), {
     headers: { "content-type": "application/json" },
   });
 });
+
+// Sends one push payload to every device a user has registered, pruning
+// subscriptions the push service reports as dead (404/410).
+async function sendPushTo(admin: ReturnType<typeof createClient>, userId: string, title: string, body: string): Promise<void> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", userId);
+  for (const sub of subs ?? []) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        JSON.stringify({ title, body, url: "/" }),
+      );
+    } catch (e: any) {
+      if (e?.statusCode === 404 || e?.statusCode === 410) {
+        await admin.from("push_subscriptions").delete().eq("id", sub.id);
+      }
+    }
+  }
+}
+
+// Head-to-head challenges: once ends_at passes, whoever gained the most
+// return % relative to their baseline-at-accept wins. Uses the same
+// leaderboard_return_pct the client already pushes on every save.
+async function resolveChallenges(admin: ReturnType<typeof createClient>): Promise<number> {
+  const { data: chs } = await admin.from("challenges").select("*")
+    .eq("status", "active").lte("ends_at", new Date().toISOString());
+  let resolved = 0;
+  for (const ch of (chs ?? []) as any[]) {
+    const { data: profs } = await admin.from("profiles")
+      .select("id, leaderboard_return_pct").in("id", [ch.challenger, ch.opponent]);
+    const pct = (id: string) => (profs ?? []).find((p: any) => p.id === id)?.leaderboard_return_pct ?? 0;
+    const cDelta = pct(ch.challenger) - (ch.challenger_start_pct ?? 0);
+    const oDelta = pct(ch.opponent) - (ch.opponent_start_pct ?? 0);
+    const winner = cDelta === oDelta ? null : (cDelta > oDelta ? ch.challenger : ch.opponent);
+    await admin.from("challenges").update({ status: "done", winner }).eq("id", ch.id);
+    const line = (mine: number, theirs: number, theirName: string) =>
+      mine === theirs ? `It's a tie with ${theirName} — ${mine.toFixed(2)}% each` :
+      mine > theirs ? `You beat ${theirName}! ${mine.toFixed(2)}% vs ${theirs.toFixed(2)}%` :
+      `${theirName} won this one — ${theirs.toFixed(2)}% vs your ${mine.toFixed(2)}%`;
+    await sendPushTo(admin, ch.challenger, "🏁 Challenge over!", line(cDelta, oDelta, ch.opponent_name || "your rival"));
+    await sendPushTo(admin, ch.opponent, "🏁 Challenge over!", line(oDelta, cDelta, ch.challenger_name || "your rival"));
+    resolved++;
+  }
+  return resolved;
+}
+
+// Monday 9:00 AM ET recap: report each user's week-over-week return delta,
+// then roll the snapshot forward. The */2 cron only lands in the 9:00-9:01
+// window once, so this fires at most once per week.
+async function weeklyRecap(admin: ReturnType<typeof createClient>): Promise<number> {
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+  const p: Record<string, string> = {};
+  f.formatToParts(new Date()).forEach((x) => (p[x.type] = x.value));
+  if (p.weekday !== "Mon" || +p.hour !== 9 || +p.minute >= 2) return 0;
+
+  const { data: rows } = await admin.from("profiles").select("id, leaderboard_return_pct, week_start_pct");
+  let sent = 0;
+  for (const row of (rows ?? []) as any[]) {
+    const nowPct = row.leaderboard_return_pct ?? 0;
+    if (row.week_start_pct !== null && row.week_start_pct !== undefined) {
+      const delta = nowPct - row.week_start_pct;
+      await sendPushTo(admin, row.id, "📈 Your week on PaperTrade",
+        `${delta >= 0 ? "+" : ""}${delta.toFixed(2)}% this week. ${delta >= 0 ? "Keep it rolling!" : "New week, fresh start."}`);
+      sent++;
+    }
+    await admin.from("profiles").update({ week_start_pct: nowPct, week_start_at: new Date().toISOString() }).eq("id", row.id);
+  }
+  return sent;
+}
 
 async function checkPriceAlerts(
   admin: ReturnType<typeof createClient>,
