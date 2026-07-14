@@ -59,13 +59,23 @@ alter table public.profiles add column if not exists leaderboard_bot_label text;
 -- recap, so the next recap can report the week's delta
 alter table public.profiles add column if not exists week_start_pct numeric;
 alter table public.profiles add column if not exists week_start_at timestamptz;
+-- bot marketplace: sanitized custom bot configs (pool/brain/risk/tp/sl only
+-- -- never cash/holdings/trades), so another user can "Clone" a config
+-- straight from the bot leaderboard. Only populated for custom bots.
+alter table public.profiles add column if not exists leaderboard_bot_configs jsonb;
+-- public profile page (?u=<id>): badge count is the only extra field it
+-- needs beyond what's already exposed.
+alter table public.profiles add column if not exists leaderboard_badges_count int;
+-- per-notification-type opt-outs, read by bot-tick before sending each push
+alter table public.profiles add column if not exists notif_prefs jsonb;
 
 -- drop+recreate rather than "or replace": postgres refuses to reorder/insert
 -- view columns in place, and column order here isn't worth preserving
 drop view if exists public.leaderboard_public;
 create view public.leaderboard_public as
   select id, display_name, leaderboard_return_pct, leaderboard_value,
-         leaderboard_bot_return_pct, leaderboard_bot_label, updated_at
+         leaderboard_bot_return_pct, leaderboard_bot_label, leaderboard_bot_configs,
+         leaderboard_badges_count, updated_at
   from public.profiles
   where leaderboard_opt_in = true
   order by leaderboard_return_pct desc nulls last

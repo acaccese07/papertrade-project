@@ -23,6 +23,7 @@ html,body{height:100%}
 body{font-family:var(--sans);background:var(--gray-1);color:var(--ink);
   max-width:430px;margin:0 auto;overflow:hidden;position:relative;
   -webkit-font-smoothing:antialiased;user-select:none}
+#publicProfile{min-height:100dvh;overflow-y:auto;padding:24px 20px calc(24px + env(safe-area-inset-bottom))}
 button{font-family:inherit;border:none;background:none;cursor:pointer;color:inherit}
 input{font-family:inherit;border:none;outline:none;background:none;color:inherit}
 
@@ -201,6 +202,7 @@ canvas{width:100%;display:block}
 <script>document.documentElement.setAttribute("data-theme",localStorage.getItem("ppt-theme")||"light")</script>
 </head>
 <body>
+<div id="publicProfile" style="display:none"></div>
 <div id="app">
   <div id="tape" onclick="this.classList.toggle('paused')" title="Tap to pause"><div id="tapeTrack"></div></div>
 
@@ -448,6 +450,7 @@ function cloudSyncBox(){
         <button class="${S.leaderboardOptIn?"on":""}" onclick="setLeaderboardOptIn(true)">On</button>
       </div>
     </div>
+    ${notifPrefsHTML()}
     <button class="cta sell" style="padding:11px" onclick="cloudSignOut()">Sign out</button>`;
   return`<div style="font-size:12px;color:var(--gray-4);margin-bottom:8px;line-height:1.5">Sign in with a magic link to back this profile up and pick it up on another device — no password needed.</div>
     <input class="keyinput" id="cloudEmail" placeholder="you@email.com" type="email">
@@ -473,17 +476,37 @@ function setLeaderboardOptIn(on){
   S.leaderboardOptIn=on;scheduleSave();openSettings();
   toast(on?"You're on the public leaderboard 🏆":"Removed from the public leaderboard");
 }
+const NOTIF_TYPES=[["alerts","🔔","Price alerts"],["duels","⚔️","Duel results"],["recap","📈","Weekly recap"]];
+function notifPrefsHTML(){
+  return`<div style="margin-bottom:10px">
+    <div style="font-size:13px;margin-bottom:8px">Notifications</div>
+    ${NOTIF_TYPES.map(([k,ic,label])=>`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:13px">${ic} ${label}</span>
+      <div class="seg" style="margin:0;width:80px">
+        <button class="${S.notifPrefs&&S.notifPrefs[k]?"":"on"}" onclick="setNotifPref('${k}',false)">Off</button>
+        <button class="${S.notifPrefs&&S.notifPrefs[k]?"on":""}" onclick="setNotifPref('${k}',true)">On</button>
+      </div></div>`).join("")}</div>`;
+}
+function setNotifPref(k,on){
+  if(!S.notifPrefs)S.notifPrefs={alerts:true,duels:true,recap:true};
+  S.notifPrefs[k]=on;scheduleSave();openSettings();
+}
 async function pushCloud(){
   if(!sb||!cloudUser||!S)return;
   const v=youValue(),returnPct=S.start?(v-S.start)/S.start*100:0;
-  let botStart=0,botVal=0;const botLabels=[];
+  let botStart=0,botVal=0;const botLabels=[],botConfigs={};
   ["crypto","stock"].forEach(k=>{const b=S.bots&&S.bots[k];
     if(b&&b.active){botStart+=b.start;botVal+=botValue(k);
-      const l=botStratLabel(k);botLabels.push(l.ic+" "+l.name)}});
+      const l=botStratLabel(k);botLabels.push(l.ic+" "+l.name);
+      if(b.strategy==="custom"&&b.custom)botConfigs[k]={brain:b.custom.brain,pool:b.custom.pool,
+        risk:Math.round(b.custom.risk*100),tp:b.custom.tp,sl:b.custom.sl?-b.custom.sl:0}}});
   try{await sb.from("profiles").upsert({id:cloudUser.id,display_name:profiles.active||"Trader",state:S,
     leaderboard_opt_in:!!S.leaderboardOptIn,leaderboard_return_pct:returnPct,leaderboard_value:v,
     leaderboard_bot_return_pct:botStart?(botVal-botStart)/botStart*100:null,
-    leaderboard_bot_label:botLabels.join(" + ")||null})}catch(e){}
+    leaderboard_bot_label:botLabels.join(" + ")||null,
+    leaderboard_bot_configs:Object.keys(botConfigs).length?botConfigs:null,
+    leaderboard_badges_count:Object.keys(S.ach||{}).length,
+    notif_prefs:S.notifPrefs||null})}catch(e){}
 }
 async function reconcileCloud(){
   if(!sb||!cloudUser)return;
@@ -525,6 +548,16 @@ function openInviteSheet(){
    <div class="keyinput" style="word-break:break-all;margin-bottom:10px">${esc(link)}</div>
    <button class="cta" style="padding:13px;margin-bottom:8px" onclick="shareInviteLink()">Share link</button>
    <button class="cta sell" style="padding:12px" onclick="navigator.clipboard.writeText('${link}');toast('Link copied')">Copy link</button>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+function openPublicProfileSheet(){
+  const link=location.origin+location.pathname+"?u="+cloudUser.id;
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🔗 My public profile</h2>
+   <p style="font-size:13px;color:var(--gray-4);margin-bottom:14px;line-height:1.5">A read-only page showing your return %, bot, and badges — good for a bio link.
+   ${S.leaderboardOptIn?"":`<br><br>⚠️ You're not on the public leaderboard yet, so this link won't show anything until you turn it on above.`}</p>
+   <div class="keyinput" style="word-break:break-all;margin-bottom:10px">${esc(link)}</div>
+   <button class="cta" style="padding:13px;margin-bottom:8px" onclick="navigator.clipboard.writeText('${link}');toast('Link copied')">Copy link</button>
+   <button class="cta sell" style="padding:12px" onclick="window.open('${link}','_blank')">Preview it</button>`;
   $("overlay").classList.add("show");$("sheet").classList.add("show");
 }
 async function shareInviteLink(){
@@ -573,7 +606,7 @@ function defaultState(bal){return{
   bots:{crypto:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0},
         stock:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0}},
   orders:[],reserved:0,ach:{},custom:[],created:Date.now(),streak:{count:0,lastDay:null},leaderboardOptIn:false,
-  missions:{},flags:{}
+  missions:{},flags:{},notifPrefs:{alerts:true,duels:true,recap:true}
 }}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,800)}
 function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S);if(sb&&cloudUser)pushCloud()}
@@ -1102,9 +1135,32 @@ async function openInsights(){
    ${best?statRow("Best sell",best.id+" "+(best.pl>=0?"+":"")+fmt(best.pl).replace("$-","-$"),best.pl>=0?"pos":"neg"):""}
    ${worst&&worst!==best?statRow("Worst sell",worst.id+" "+(worst.pl>=0?"+":"")+fmt(worst.pl).replace("$-","-$"),worst.pl>=0?"pos":"neg"):""}
    <div id="benchBox" style="margin-top:12px"><div class="empty" style="padding:14px">Computing your buy-and-hold benchmark…</div></div>
-   ${!sells.length?`<div class="empty" style="padding:14px;margin-top:6px">Sell something and your win rate, best and worst trades will show up here.</div>`:""}`;
+   ${!sells.length?`<div class="empty" style="padding:14px;margin-top:6px">Sell something and your win rate, best and worst trades will show up here.</div>`:""}
+   ${compositionHTML()}`;
   $("overlay").classList.add("show");$("sheet").classList.add("show");
   renderBenchmark();
+}
+function compositionHTML(){
+  const cats={Cash:{v:S.cash,c:"var(--gray-3)"},"US stocks":{v:0,c:"var(--ink)"},
+    "Canadian stocks":{v:0,c:"#8E5CD9"},Crypto:{v:0,c:"#3B82F6"},Meme:{v:0,c:"#F59E0B"}};
+  for(const id in S.holdings){
+    const a=ASSETS.find(x=>x.id===id),h=S.holdings[id],val=h.qty*prices[id];
+    if(!a)continue;
+    const key=a.cat==="meme"?"Meme":a.cat==="ca"?"Canadian stocks":a.t==="crypto"?"Crypto":"US stocks";
+    cats[key].v+=val;
+  }
+  const total=Object.values(cats).reduce((s,c)=>s+c.v,0)||1;
+  const rows=Object.entries(cats).filter(([,c])=>c.v>0.01);
+  if(rows.length<=1)return"";
+  return`<div class="label" style="margin:16px 0 8px 4px">Where your money is</div>
+   <div class="card" style="padding:16px">
+     <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:12px">
+       ${rows.map(([,c])=>`<div style="width:${(c.v/total*100).toFixed(2)}%;background:${c.c}"></div>`).join("")}
+     </div>
+     ${rows.map(([name,c])=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px">
+        <span style="width:9px;height:9px;border-radius:50%;background:${c.c};flex-shrink:0"></span>
+        <span style="flex:1">${name}</span><b style="font-family:var(--mono)">${(c.v/total*100).toFixed(1)}%</b></div>`).join("")}
+   </div>`;
 }
 async function renderBenchmark(){
   const box=$("benchBox");if(!box)return;
@@ -1204,6 +1260,7 @@ function openSettings(){
    <button class="settings-row" style="width:100%;text-align:left" onclick="openTimeMachine()"><span>🕰 Time Machine</span><b>›</b></button>
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openMyAlerts()"><span>🔔 My price alerts</span><b>›</b></button>`:""}
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openInviteSheet()"><span>🎁 Invite a friend</span><b>›</b></button>`:""}
+   ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openPublicProfileSheet()"><span>🔗 My public profile</span><b>›</b></button>`:""}
    <div class="settings-row" style="display:block">
      <div style="margin-bottom:8px"><b>🏅 Badges</b> <span style="color:var(--gray-4);font-size:12px">${Object.keys(S.ach||{}).length}/${ACH.length}</span></div>
      <div style="display:flex;flex-wrap:wrap;gap:6px">${ACH.map(([id,ic,name])=>
@@ -1395,7 +1452,71 @@ function customBuilderHTML(k){
     ${segRow("Risk per trade","risk",[[5,"5%"],[10,"10%"],[15,"15%"],[20,"20%"]])}
     ${segRow("Take profit at","tp",[[5,"+5%"],[10,"+10%"],[20,"+20%"],[0,"Off"]])}
     ${segRow("Stop loss at","sl",[[5,"−5%"],[8,"−8%"],[12,"−12%"],[0,"Off"]])}
+    ${k==="crypto"?`<button class="cta sell" style="padding:11px;margin-top:8px" onclick="backtestCustomBot('${k}')">📊 Preview last 30 days</button>
+    <div id="backtestBox" style="margin-top:8px"></div>`
+    :`<div style="font-size:11px;color:var(--gray-4);margin-top:8px">Backtest preview is crypto-only for now — stock historical data isn't reliable enough on the free tier.</div>`}
   </div>`;
+}
+async function backtestCustomBot(k){
+  const c=customCfg[k];
+  if(!c.pool.length)return toast("Pick at least one asset first");
+  const box=$("backtestBox");
+  if(box)box.innerHTML=`<div class="empty" style="padding:14px">Running backtest on real prices…</div>`;
+  try{
+    const series={};
+    await Promise.all(c.pool.map(async id=>{
+      const a=ASSETS.find(x=>x.id===id);if(!a||!a.gecko)return;
+      const r=await fetch(`https://api.coingecko.com/api/v3/coins/${a.gecko}/market_chart?vs_currency=usd&days=30`);
+      const j=await r.json();
+      const pts=(j.prices||[]).map(p=>p[1]);
+      if(pts.length>10)series[id]=pts;
+    }));
+    const ids=Object.keys(series);
+    if(!ids.length)throw 0;
+    const len=Math.min(...ids.map(id=>series[id].length));
+    const risk=c.risk/100,tp=c.tp||null,sl=c.sl?-c.sl:null;
+    let cash=1000;const holdings={};
+    for(let t=8;t<len;t++){
+      for(const id of Object.keys(holdings)){
+        const h=holdings[id],price=series[id][t],plp=(price*h.qty-h.cost)/h.cost*100;
+        if((tp&&plp>=tp)||(sl&&plp<=sl)){cash+=h.qty*price;delete holdings[id]}
+      }
+      const heldVal=Object.entries(holdings).reduce((s,[id,h])=>s+h.qty*series[id][t],0);
+      const budget=Math.min(cash,(cash+heldVal)*risk);
+      if(budget<5)continue;
+      let pick=null;
+      if(c.brain==="steady"){
+        const ranked=ids.map(id=>({id,val:holdings[id]?holdings[id].qty*series[id][t]:0}));
+        ranked.sort((a,b)=>a.val-b.val);pick=ranked[0].id;
+      }else if(c.brain==="dip"){
+        let best=null,bestGap=0.5;
+        ids.forEach(id=>{const win=series[id].slice(Math.max(0,t-20),t);
+          const avg=win.reduce((a,b)=>a+b,0)/win.length,gap=(avg-series[id][t])/avg*100;
+          if(gap>bestGap){bestGap=gap;best=id}});
+        pick=best;
+      }else{
+        let best=null,bestMom=1;
+        ids.forEach(id=>{const mom=(series[id][t]-series[id][t-8])/series[id][t-8]*100;
+          if(mom>bestMom){bestMom=mom;best=id}});
+        pick=best;
+      }
+      if(!pick)continue;
+      const price=series[pick][t],qty=budget/price;
+      cash-=budget;
+      const h=holdings[pick]||(holdings[pick]={qty:0,cost:0});
+      h.qty+=qty;h.cost+=budget;
+    }
+    const finalVal=cash+Object.entries(holdings).reduce((s,[id,h])=>s+h.qty*series[id][len-1],0);
+    const retPct=(finalVal-1000)/1000*100;
+    if(!$("backtestBox"))return;
+    $("backtestBox").innerHTML=`<div class="card" style="padding:14px 16px">
+      <div class="label" style="margin-bottom:4px">Last 30 days · illustrative</div>
+      <div style="font-family:var(--mono);font-weight:700;font-size:22px" class="${retPct>=0?"pos":"neg"}">${retPct>=0?"+":""}${retPct.toFixed(2)}%</div>
+      <div style="font-size:12px;color:var(--gray-4);margin-top:4px;line-height:1.5">Simulated on a $1,000 bankroll using real historical prices for ${ids.join(", ")}. Real trading differs (exact timing, cooldowns) — treat this as a rough guide, not a promise.</div>
+    </div>`;
+  }catch(e){
+    if($("backtestBox"))$("backtestBox").innerHTML=`<div class="empty" style="padding:14px">Couldn't run the backtest right now — try again in a minute.</div>`;
+  }
 }
 function startBot(k){
   const v=parseFloat($("budget-"+k).value)||0;
@@ -1422,8 +1543,10 @@ function botStratLabel(k){
   return BOT_STRATS[k][b.strategy]||{ic:"🤖",name:"Bot"};
 }
 function heartbeatAgo(ts){
+  // deliberately no "just now" bucket -- the bot rechecks every 5s, so a
+  // bucket that wide would always reset before ever showing, making a live
+  // bot look identically frozen to a genuinely stuck one
   const s=Math.max(0,Math.round((Date.now()-ts)/1000));
-  if(s<5)return"just now";
   if(s<60)return s+"s ago";
   if(s<3600)return Math.round(s/60)+"m ago";
   return Math.round(s/3600)+"h ago";
@@ -1909,6 +2032,7 @@ function migrateState(){
   if(!S.orders)S.orders=[];if(S.reserved===undefined)S.reserved=0;if(!S.ach)S.ach={};
   if(S.email===undefined)S.email="";if(!S.level)S.level="some";
   if(!S.missions)S.missions={};if(!S.flags)S.flags={};
+  if(!S.notifPrefs)S.notifPrefs={alerts:true,duels:true,recap:true};
   if(!S.streak)S.streak={count:0,lastDay:null};
   if(S.leaderboardOptIn===undefined)S.leaderboardOptIn=false;
   S.custom.forEach(a=>{if(!ASSETS.some(x=>x.id===a.id))registerAsset(a)});
@@ -1979,6 +2103,7 @@ async function openLeaderboard(){
   else if(lbTab==="duels")renderChallenges();
   else renderGlobalLeaderboard();
 }
+let lastBotLbRows=[];
 async function renderBotLeaderboard(){
   if(!$("lbBody"))return;
   if(!sb){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Cloud sync isn't available right now.</div>`;return}
@@ -1988,15 +2113,28 @@ async function renderBotLeaderboard(){
     .order("leaderboard_bot_return_pct",{ascending:false}).limit(50);data=r.data}catch(e){}
   if(!$("lbBody"))return;
   if(!data){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Couldn't load the bot leaderboard right now.</div>`;return}
+  lastBotLbRows=data;
   const medals=["🥇","🥈","🥉"];
-  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Whose bot is winning — ranked by the bots' own return, with the strategy they're running.</p>
+  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Whose bot is winning — ranked by the bots' own return. Tap Clone to copy a custom bot's exact settings into your own builder.</p>
    ${data.length?data.map((r,i)=>{const me=cloudUser&&r.id===cloudUser.id,pct=r.leaderboard_bot_return_pct||0;
-     return`<div class="row" style="cursor:default;${me?"border-color:var(--ink)":""}">
+     const configs=r.leaderboard_bot_configs||{};
+     const cloneBtns=me?"":Object.keys(configs).map(k=>
+       `<button class="chip" style="padding:5px 10px;font-size:11px" onclick="cloneBotConfig(${i},'${k}')">Clone ${k}</button>`).join("");
+     return`<div class="row" style="cursor:default;flex-wrap:wrap;${me?"border-color:var(--ink)":""}">
        <div style="font-size:20px;width:32px;text-align:center">${medals[i]||(i+1)}</div>
        <div class="row-mid"><div class="row-name">${esc(r.display_name)}${me?" (you)":""}</div>
          <div class="row-sub">${esc(r.leaderboard_bot_label||"Bot")}</div></div>
-       <div class="row-right"><div class="row-chg ${pct>=0?"pos":"neg"}" style="font-size:15px">${pct>=0?"+":""}${pct.toFixed(2)}%</div></div></div>`}).join("")
+       <div class="row-right"><div class="row-chg ${pct>=0?"pos":"neg"}" style="font-size:15px">${pct>=0?"+":""}${pct.toFixed(2)}%</div></div>
+       ${cloneBtns?`<div style="width:100%;display:flex;gap:6px;margin-top:8px;padding-left:44px">${cloneBtns}</div>`:""}</div>`}).join("")
      :`<div class="empty" style="padding:18px">No bots on the board yet — activate one under the Bot tab and opt into the leaderboard in ⚙ Settings.</div>`}`;
+}
+function cloneBotConfig(rowIdx,k){
+  const cfg=(lastBotLbRows[rowIdx]||{}).leaderboard_bot_configs?.[k];
+  if(!cfg)return toast("Couldn't find that config");
+  customCfg[k]={brain:cfg.brain||"steady",pool:[...(cfg.pool||[])],risk:cfg.risk||10,tp:cfg.tp||0,sl:cfg.sl||0};
+  botPick[k]="custom";
+  closeSheet();go("bot");setBotTab(k);renderBot();
+  toast(`Cloned into your ${k} builder — review and activate when ready`);
 }
 async function renderDeviceLeaderboard(){
   const rows=[];
@@ -2123,7 +2261,52 @@ function boot(){
   const ch=params.get("challenge");
   if(ch)localStorage.setItem("ppt-pending-challenge",ch);
 })();
-init();
+
+/* ================= PUBLIC PROFILE PAGE (?u=<id>) ================= */
+async function maybeShowPublicProfile(){
+  const uid=new URLSearchParams(location.search).get("u");
+  if(!uid)return false;
+  document.getElementById("app").style.display="none";
+  const box=$("publicProfile");
+  box.style.display="block";
+  box.innerHTML=`<div class="empty" style="padding:60px 20px">Loading trader profile…</div>`;
+  if(!sb){box.innerHTML=publicProfileErrorHTML("Profiles aren't available right now.");return true}
+  try{
+    const{data}=await sb.from("leaderboard_public").select("*").eq("id",uid).maybeSingle();
+    box.innerHTML=data?publicProfileHTML(data):publicProfileErrorHTML("This trader hasn't opted into public profiles, or the link's wrong.");
+  }catch(e){
+    box.innerHTML=publicProfileErrorHTML("Couldn't load this profile right now.");
+  }
+  return true;
+}
+function publicProfileErrorHTML(msg){
+  return`<div style="text-align:center;padding:60px 10px">
+    <div style="font-size:40px;margin-bottom:10px">🔍</div>
+    <h1 style="font-size:20px;font-weight:800;margin-bottom:8px">Profile not found</h1>
+    <p style="font-size:14px;color:var(--gray-4);margin-bottom:24px">${esc(msg)}</p>
+    <button class="cta" style="max-width:280px;margin:0 auto;padding:14px" onclick="location.href=location.pathname">Go to PaperTrade</button>
+  </div>`;
+}
+function publicProfileHTML(r){
+  const pct=r.leaderboard_return_pct||0,botPct=r.leaderboard_bot_return_pct;
+  return`<div style="text-align:center;margin-bottom:20px">
+    <div style="font-size:13px;color:var(--gray-4);font-weight:600">📈 PAPERTRADE TRADER</div>
+  </div>
+  <div class="card dark" style="text-align:center;padding:28px 20px">
+    <div style="font-size:22px;font-weight:800;margin-bottom:4px">${esc(r.display_name)}</div>
+    <div class="label" style="margin:14px 0 4px">All-time return</div>
+    <div style="font-family:var(--mono);font-weight:800;font-size:40px" class="${pct>=0?"pos":"neg"}">${pct>=0?"+":""}${pct.toFixed(2)}%</div>
+    ${r.leaderboard_badges_count?`<div style="margin-top:14px;font-size:13px;color:#8E8E93">🏅 ${r.leaderboard_badges_count} badge${r.leaderboard_badges_count===1?"":"s"} earned</div>`:""}
+  </div>
+  ${botPct!==null&&botPct!==undefined?`<div class="card" style="margin-top:12px;padding:16px">
+    <div class="label" style="margin-bottom:4px">🤖 ${esc(r.leaderboard_bot_label||"Bot")}</div>
+    <div style="font-family:var(--mono);font-weight:700;font-size:20px" class="${botPct>=0?"pos":"neg"}">${botPct>=0?"+":""}${botPct.toFixed(2)}%</div>
+  </div>`:""}
+  <p style="text-align:center;font-size:13px;color:var(--gray-4);margin:20px 0;line-height:1.5">Practice trading with fake money and real, live prices — build your own track record.</p>
+  <button class="cta" style="padding:15px" onclick="location.href=location.pathname">Start trading free</button>`;
+}
+
+maybeShowPublicProfile().then(shown=>{if(!shown)init()});
 </script>
 </body>
 </html>

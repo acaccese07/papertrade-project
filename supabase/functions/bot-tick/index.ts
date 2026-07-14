@@ -248,8 +248,18 @@ Deno.serve(async (_req) => {
 
 // Sends one push payload to every device a user has registered, pruning
 // subscriptions the push service reports as dead (404/410).
-async function sendPushTo(admin: ReturnType<typeof createClient>, userId: string, title: string, body: string): Promise<void> {
+// Reads the user's per-notification-type opt-out (set in Settings, synced
+// via pushCloud's notif_prefs field). Missing/null means "not set yet" ->
+// default to allowed, so existing users don't silently stop getting pushes.
+async function notifAllowed(admin: ReturnType<typeof createClient>, userId: string, key: string): Promise<boolean> {
+  const { data } = await admin.from("profiles").select("notif_prefs").eq("id", userId).maybeSingle();
+  const prefs = (data?.notif_prefs as any) || {};
+  return prefs[key] !== false;
+}
+
+async function sendPushTo(admin: ReturnType<typeof createClient>, userId: string, title: string, body: string, notifKey?: string): Promise<void> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  if (notifKey && !(await notifAllowed(admin, userId, notifKey))) return;
   const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", userId);
   for (const sub of subs ?? []) {
     try {
@@ -284,8 +294,8 @@ async function resolveChallenges(admin: ReturnType<typeof createClient>): Promis
       mine === theirs ? `It's a tie with ${theirName} — ${mine.toFixed(2)}% each` :
       mine > theirs ? `You beat ${theirName}! ${mine.toFixed(2)}% vs ${theirs.toFixed(2)}%` :
       `${theirName} won this one — ${theirs.toFixed(2)}% vs your ${mine.toFixed(2)}%`;
-    await sendPushTo(admin, ch.challenger, "🏁 Challenge over!", line(cDelta, oDelta, ch.opponent_name || "your rival"));
-    await sendPushTo(admin, ch.opponent, "🏁 Challenge over!", line(oDelta, cDelta, ch.challenger_name || "your rival"));
+    await sendPushTo(admin, ch.challenger, "🏁 Challenge over!", line(cDelta, oDelta, ch.opponent_name || "your rival"), "duels");
+    await sendPushTo(admin, ch.opponent, "🏁 Challenge over!", line(oDelta, cDelta, ch.challenger_name || "your rival"), "duels");
     resolved++;
   }
   return resolved;
@@ -307,7 +317,7 @@ async function weeklyRecap(admin: ReturnType<typeof createClient>): Promise<numb
     if (row.week_start_pct !== null && row.week_start_pct !== undefined) {
       const delta = nowPct - row.week_start_pct;
       await sendPushTo(admin, row.id, "📈 Your week on PaperTrade",
-        `${delta >= 0 ? "+" : ""}${delta.toFixed(2)}% this week. ${delta >= 0 ? "Keep it rolling!" : "New week, fresh start."}`);
+        `${delta >= 0 ? "+" : ""}${delta.toFixed(2)}% this week. ${delta >= 0 ? "Keep it rolling!" : "New week, fresh start."}`, "recap");
       sent++;
     }
     await admin.from("profiles").update({ week_start_pct: nowPct, week_start_at: new Date().toISOString() }).eq("id", row.id);
@@ -342,23 +352,8 @@ async function checkPriceAlerts(
     const hit = al.direction === "above" ? q.price >= al.target : q.price <= al.target;
     if (!hit) continue;
 
-    const { data: subs } = await admin.from("push_subscriptions").select("*").eq("user_id", al.user_id);
-    for (const sub of subs ?? []) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify({
-            title: `${al.asset_id} is ${al.direction} ${al.target}`,
-            body: `Now at $${q.price.toLocaleString()} — tap to open PaperTrade`,
-            url: "/",
-          }),
-        );
-      } catch (e: any) {
-        if (e?.statusCode === 404 || e?.statusCode === 410) {
-          await admin.from("push_subscriptions").delete().eq("id", sub.id);
-        }
-      }
-    }
+    await sendPushTo(admin, al.user_id, `${al.asset_id} is ${al.direction} ${al.target}`,
+      `Now at $${q.price.toLocaleString()} — tap to open PaperTrade`, "alerts");
     await admin.from("price_alerts").update({ active: false, triggered_at: new Date().toISOString() }).eq("id", al.id);
     fired++;
   }
