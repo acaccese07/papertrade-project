@@ -203,6 +203,8 @@ Deno.serve(async (_req) => {
       if (!strat) continue;
       const brain = bot.strategy === "custom" ? (strat as any).brain : bot.strategy;
       const prices = k === "crypto" ? cryptoPrices : stockPrices;
+      bot.lastCheck = Date.now();
+      changed = true; // persist the heartbeat even on ticks with no trade
 
       for (const id of Object.keys({ ...bot.holdings })) {
         const h = bot.holdings[id], q = prices[id];

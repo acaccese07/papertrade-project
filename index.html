@@ -530,6 +530,18 @@ async function shareInviteLink(){
   }
   navigator.clipboard.writeText(link);toast("Link copied — share it anywhere");
 }
+async function resyncFromCloud(){
+  if(!sb||!cloudUser||!S)return;
+  try{
+    const{data}=await sb.from("profiles").select("state").eq("id",cloudUser.id).maybeSingle();
+    if(!data||!data.state||!Object.keys(data.state).length)return;
+    S=data.state;migrateState();
+    refreshAll();
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible")resyncFromCloud();
+});
 function adoptCloudState(data){
   S=data.state;migrateState();
   profiles.active=data.display_name||"Trader";
@@ -1327,6 +1339,10 @@ function renderBotSection(k){
            Cash ${fmt(b.cash)}<br>${holds.length} position${holds.length===1?"":"s"}</div>
        </div>
        ${k==="stock"&&!open?`<div style="font-size:12px;color:#8E8E93;margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a">⏸ Market closed — holding positions. Trading resumes ${nextOpenText()}.</div>`:""}
+       <div style="display:flex;align-items:center;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a;font-size:11px;color:#8E8E93">
+         <span style="width:6px;height:6px;border-radius:50%;background:var(--up);flex-shrink:0;animation:blink 1.6s infinite"></span>
+         ${b.lastCheck?`Last checked ${heartbeatAgo(b.lastCheck)}`:"Checking…"}${b.lastAct?` · last trade ${heartbeatAgo(b.lastAct)}`:""}
+       </div>
      </div>
      ${holds.length?`<div class="label" style="margin:14px 0 8px 4px">Holdings</div>`+holds.map(id=>{const h=b.holdings[id],p=prices[id],hpl=p*h.qty-h.cost;
        return `<div class="row" style="cursor:default;padding:11px 16px">${badgeHTML(id,k==="crypto","width:36px;height:36px;font-size:10px")}
@@ -1401,6 +1417,13 @@ function botStratLabel(k){
   }
   return BOT_STRATS[k][b.strategy]||{ic:"🤖",name:"Bot"};
 }
+function heartbeatAgo(ts){
+  const s=Math.max(0,Math.round((Date.now()-ts)/1000));
+  if(s<5)return"just now";
+  if(s<60)return s+"s ago";
+  if(s<3600)return Math.round(s/60)+"m ago";
+  return Math.round(s/3600)+"h ago";
+}
 function stopBot(k){
   const b=S.bots[k];
   for(const id in b.holdings)b.cash+=b.holdings[id].qty*prices[id];
@@ -1415,6 +1438,7 @@ function sma(id,n){const h=hist[id];if(h.length<2)return prices[id];
 function botThink(k){
   const b=S.bots[k];if(!b||!b.active)return;
   if(k==="stock"&&!marketOpen())return; // prices frozen, nothing to do
+  b.lastCheck=Date.now();
   const st=b.strategy==="custom"?b.custom:BOT_STRATS[k][b.strategy],now=Date.now();
   if(!st||!st.pool||!st.pool.length)return;
   const brain=b.strategy==="custom"?(st.brain||"steady"):b.strategy;
@@ -2085,6 +2109,7 @@ function boot(){
   pollStocks();setInterval(pollStocks,21000);
   setInterval(simTick,2500);
   setInterval(()=>{botThink("crypto");botThink("stock")},5000);
+  setInterval(()=>{if($("scr-bot")&&$("scr-bot").classList.contains("active")&&S&&((S.bots.crypto&&S.bots.crypto.active)||(S.bots.stock&&S.bots.stock.active)))renderBot()},1000);
   updateMktPill();setInterval(updateMktPill,20000);
 }
 (function captureReferral(){
