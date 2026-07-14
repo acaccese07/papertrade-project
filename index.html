@@ -440,6 +440,7 @@ const SUPABASE_KEY="sb_publishable_KXQRhXlM058xNHP1G2YFNw_s7VC-Lr0";
 let sb=null;
 try{if(window.supabase)sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){}
 let cloudUser=null,cloudResolved=false;
+let authMode="password"; // password-first: works even when magic-link email delivery is broken
 let localReadyResolve;const localReadyPromise=new Promise(r=>localReadyResolve=r);
 function cloudSyncBox(){
   if(!sb)return`<div style="font-size:12px;color:var(--gray-4)">Cloud sync isn't available right now.</div>`;
@@ -453,9 +454,45 @@ function cloudSyncBox(){
     </div>
     ${notifPrefsHTML()}
     <button class="cta sell" style="padding:11px" onclick="cloudSignOut()">Sign out</button>`;
-  return`<div style="font-size:12px;color:var(--gray-4);margin-bottom:8px;line-height:1.5">Sign in with a magic link to back this profile up and pick it up on another device — no password needed.</div>
+  return`<div class="seg" style="margin:0 0 10px">
+    <button class="${authMode==="password"?"on":""}" onclick="setAuthMode('password')">Password</button>
+    <button class="${authMode==="magic"?"on":""}" onclick="setAuthMode('magic')">Magic link</button>
+  </div>
+  ${authMode==="password"?`<div style="font-size:12px;color:var(--gray-4);margin-bottom:8px;line-height:1.5">Create a password so you can log in from any device, any time — doesn't depend on email delivery.</div>
+    <input class="keyinput" id="cloudEmail" placeholder="you@email.com" type="email" style="margin-bottom:8px">
+    <input class="keyinput" id="cloudPass" placeholder="Password (6+ characters)" type="password">
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="cta" style="flex:1;padding:13px" onclick="signUpPassword()">Create account</button>
+      <button class="cta sell" style="flex:1;padding:13px" onclick="signInPassword()">Log in</button>
+    </div>`
+  :`<div style="font-size:12px;color:var(--gray-4);margin-bottom:8px;line-height:1.5">Sign in with a magic link to back this profile up and pick it up on another device — no password needed.</div>
     <input class="keyinput" id="cloudEmail" placeholder="you@email.com" type="email">
-    <button class="cta" style="margin-top:10px;padding:13px" onclick="sendMagicLink($('cloudEmail').value.trim())">Send magic link</button>`;
+    <button class="cta" style="margin-top:10px;padding:13px" onclick="sendMagicLink($('cloudEmail').value.trim())">Send magic link</button>`}`;
+}
+function setAuthMode(m){authMode=m;openSettings()}
+async function signUpPassword(){
+  if(!sb)return toast("Cloud sync isn't available right now");
+  const email=($("cloudEmail").value||"").trim(),password=$("cloudPass").value||"";
+  if(!email||!email.includes("@"))return toast("Enter a valid email");
+  if(password.length<6)return toast("Password needs at least 6 characters");
+  try{
+    const{data,error}=await sb.auth.signUp({email,password});
+    if(error)throw error;
+    if(!data.session){toast("Account created — check your email to confirm before logging in");return}
+    toast("Account created — you're signed in ✅");
+  }catch(e){
+    toast((e.message||"").toLowerCase().includes("registered")?"That email's already registered — try Log in instead":"Couldn't create account — try again");
+  }
+}
+async function signInPassword(){
+  if(!sb)return toast("Cloud sync isn't available right now");
+  const email=($("cloudEmail").value||"").trim(),password=$("cloudPass").value||"";
+  if(!email||!password)return toast("Enter your email and password");
+  try{
+    const{error}=await sb.auth.signInWithPassword({email,password});
+    if(error)throw error;
+    toast("Signed in ✅");
+  }catch(e){toast("Wrong email or password")}
 }
 async function sendMagicLink(email){
   if(!sb)return toast("Cloud sync isn't available right now");
