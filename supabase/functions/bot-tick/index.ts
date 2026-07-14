@@ -160,18 +160,60 @@ function sell(bot: any, state: any, k: string, id: string, portion: number, why:
   if (state.trades.length > 300) state.trades.pop();
 }
 
+// Executes any due recurring (DCA) buys against the user's own cash/holdings
+// (not a bot's) so schedules set from the trade sheet keep running even with
+// the app closed -- same guarantee bots and price alerts already have.
+function processRecurring(
+  state: any,
+  cryptoPrices: Record<string, Quote>,
+  stockPrices: Record<string, Quote>,
+  isOpen: boolean,
+): boolean {
+  const list = state.recurring;
+  if (!Array.isArray(list) || !list.length) return false;
+  let changed = false;
+  const now = Date.now();
+  for (const r of list) {
+    if (r.assetType === "stock" && !isOpen) continue;
+    const prices = r.assetType === "crypto" ? cryptoPrices : stockPrices;
+    const q = prices[r.assetId];
+    let runs = 0;
+    while (typeof r.nextRun === "number" && r.nextRun <= now && runs < 5) {
+      if (q) {
+        const amt = Math.min(+r.amount || 0, state.cash || 0);
+        if (amt >= 1) {
+          const qty = amt / q.price;
+          state.cash -= amt;
+          state.holdings = state.holdings || {};
+          const h = state.holdings[r.assetId] || (state.holdings[r.assetId] = { qty: 0, cost: 0 });
+          h.qty += qty; h.cost += amt;
+          state.trades = state.trades || [];
+          state.trades.unshift({ t: Date.now(), side: "buy", id: r.assetId, qty, price: q.price, val: amt, who: "you", note: "auto" });
+          if (state.trades.length > 300) state.trades.pop();
+          changed = true;
+        }
+      }
+      r.nextRun += (+r.everyDays || 7) * 86400000;
+      runs++;
+    }
+  }
+  return changed;
+}
+
 Deno.serve(async (_req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { data: rows, error } = await admin.from("profiles").select("id, state");
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
-  // preset pools plus whatever symbols users' custom bots reference; custom
-  // crypto bots carry their own symbol->coingecko-id map (geckoMap) since the
-  // server's static GECKO_ID only covers the preset pools
+  // preset pools plus whatever symbols users' custom bots (and recurring
+  // buys) reference; custom crypto bots and recurring schedules each carry
+  // their own symbol->coingecko-id mapping since the server's static
+  // GECKO_ID only covers the preset pools
   const cryptoIds = new Set(Object.values(BOT_STRATS.crypto).flatMap((s) => s.pool));
   const stockIds = new Set(Object.values(BOT_STRATS.stock).flatMap((s) => s.pool));
   for (const row of rows ?? []) {
-    const bots = (row.state as any)?.bots;
+    const state = row.state as any;
+    const bots = state?.bots;
     for (const k of ["crypto", "stock"] as const) {
       const bot = bots?.[k];
       if (!bot?.active || bot.strategy !== "custom" || !Array.isArray(bot.custom?.pool)) continue;
@@ -181,6 +223,11 @@ Deno.serve(async (_req) => {
         const g = bot.custom.geckoMap?.[id];
         if (k === "crypto" && typeof g === "string") GECKO_ID[id] = g;
       }
+    }
+    for (const r of (state?.recurring ?? []) as any[]) {
+      if (typeof r.assetId !== "string") continue;
+      (r.assetType === "crypto" ? cryptoIds : stockIds).add(r.assetId);
+      if (r.assetType === "crypto" && typeof r.gecko === "string") GECKO_ID[r.assetId] = r.gecko;
     }
   }
   const isOpen = marketOpen();
@@ -192,10 +239,13 @@ Deno.serve(async (_req) => {
   let processed = 0;
   for (const row of rows ?? []) {
     const state = row.state as any;
-    if (!state?.bots) continue;
+    if (!state) continue;
     let changed = false;
 
+    if (processRecurring(state, cryptoPrices, stockPrices, isOpen)) changed = true;
+
     for (const k of ["crypto", "stock"] as const) {
+      if (!state.bots) break;
       const bot = state.bots[k];
       if (!bot?.active) continue;
       if (k === "stock" && !isOpen) continue;
@@ -240,8 +290,9 @@ Deno.serve(async (_req) => {
   const alertsFired = await checkPriceAlerts(admin, cryptoPrices, stockPrices, isOpen);
   const challengesResolved = await resolveChallenges(admin);
   const recapsSent = await weeklyRecap(admin);
+  const seasonsReset = await monthlySeasonReset(admin);
 
-  return new Response(JSON.stringify({ ok: true, accounts: (rows ?? []).length, processed, alertsFired, challengesResolved, recapsSent }), {
+  return new Response(JSON.stringify({ ok: true, accounts: (rows ?? []).length, processed, alertsFired, challengesResolved, recapsSent, seasonsReset }), {
     headers: { "content-type": "application/json" },
   });
 });
@@ -323,6 +374,33 @@ async function weeklyRecap(admin: ReturnType<typeof createClient>): Promise<numb
     await admin.from("profiles").update({ week_start_pct: nowPct, week_start_at: new Date().toISOString() }).eq("id", row.id);
   }
   return sent;
+}
+
+// Monthly season rollover: snapshot everyone's current all-time return % as
+// their new season baseline, so "this season" ranking on the client (their
+// return % minus this) resets to ~0 for everyone at once. The */2 cron only
+// lands in the 1st-00:00-00:01 window once, so this fires at most once a
+// month. Piggybacks on the existing cron rather than a separate schedule.
+async function monthlySeasonReset(admin: ReturnType<typeof createClient>): Promise<number> {
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  const p: Record<string, string> = {};
+  f.formatToParts(new Date()).forEach((x) => (p[x.type] = x.value));
+  if (+p.day !== 1 || +p.hour !== 0 || +p.minute >= 2) return 0;
+
+  const label = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit" })
+    .formatToParts(new Date()).reduce((acc, x) => (x.type === "year" || x.type === "month" ? acc + (acc ? "-" : "") + x.value : acc), "");
+  const { data: rows } = await admin.from("profiles").select("id, leaderboard_return_pct, season_label");
+  let count = 0;
+  for (const row of (rows ?? []) as any[]) {
+    if (row.season_label === label) continue; // already rolled over this month (re-run safety)
+    await admin.from("profiles").update({
+      season_start_pct: row.leaderboard_return_pct ?? 0,
+      season_start_at: new Date().toISOString(),
+      season_label: label,
+    }).eq("id", row.id);
+    count++;
+  }
+  return count;
 }
 
 async function checkPriceAlerts(

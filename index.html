@@ -188,6 +188,7 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
   border-radius:6px;margin-right:6px}
 .tag.buy{background:rgba(0,176,76,.12);color:var(--up)}
 .tag.sell{background:rgba(255,59,48,.1);color:var(--dn)}
+.tag.dividend{background:rgba(142,92,217,.14);color:#8E5CD9}
 canvas{width:100%;display:block}
 .empty{text-align:center;color:var(--gray-4);font-size:13px;padding:34px 20px;line-height:1.6}
 .toast{position:absolute;top:calc(54px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-16px);
@@ -327,7 +328,7 @@ canvas{width:100%;display:block}
 /* ================= ASSET CATALOG ================= */
 const ASSETS=[
  // ---- US large caps & tech ----
- {id:"AAPL",n:"Apple",cat:"us",t:"stock",base:242},{id:"MSFT",n:"Microsoft",cat:"us",t:"stock",base:512},
+ {id:"AAPL",n:"Apple",cat:"us",t:"stock",base:242,div:.005},{id:"MSFT",n:"Microsoft",cat:"us",t:"stock",base:512,div:.007},
  {id:"NVDA",n:"NVIDIA",cat:"us",t:"stock",base:168},{id:"TSLA",n:"Tesla",cat:"us",t:"stock",base:315,vol:2.2},
  {id:"AMZN",n:"Amazon",cat:"us",t:"stock",base:223},{id:"GOOGL",n:"Alphabet",cat:"us",t:"stock",base:185},
  {id:"META",n:"Meta",cat:"us",t:"stock",base:730},{id:"AMD",n:"AMD",cat:"us",t:"stock",base:158,vol:1.6},
@@ -342,31 +343,31 @@ const ASSETS=[
  {id:"PYPL",n:"PayPal",cat:"us",t:"stock",base:78},{id:"SQ",n:"Block (Square)",cat:"us",t:"stock",base:68,vol:1.8},
  {id:"HOOD",n:"Robinhood",cat:"us",t:"stock",base:96,vol:2.2},{id:"SOFI",n:"SoFi",cat:"us",t:"stock",base:14,vol:2},
  // ---- US finance / consumer / industrial / health ----
- {id:"JPM",n:"JPMorgan Chase",cat:"us",t:"stock",base:298},{id:"V",n:"Visa",cat:"us",t:"stock",base:378},
- {id:"MA",n:"Mastercard",cat:"us",t:"stock",base:590},{id:"WMT",n:"Walmart",cat:"us",t:"stock",base:104},
- {id:"KO",n:"Coca-Cola",cat:"us",t:"stock",base:72},{id:"PEP",n:"PepsiCo",cat:"us",t:"stock",base:154},
- {id:"MCD",n:"McDonald's",cat:"us",t:"stock",base:302},{id:"NKE",n:"Nike",cat:"us",t:"stock",base:78},
- {id:"SBUX",n:"Starbucks",cat:"us",t:"stock",base:94},{id:"BA",n:"Boeing",cat:"us",t:"stock",base:212},
- {id:"GE",n:"GE Aerospace",cat:"us",t:"stock",base:252},{id:"F",n:"Ford",cat:"us",t:"stock",base:11},
- {id:"GM",n:"General Motors",cat:"us",t:"stock",base:53},{id:"XOM",n:"Exxon Mobil",cat:"us",t:"stock",base:112},
- {id:"CVX",n:"Chevron",cat:"us",t:"stock",base:152},{id:"JNJ",n:"Johnson & Johnson",cat:"us",t:"stock",base:156},
- {id:"PFE",n:"Pfizer",cat:"us",t:"stock",base:26},{id:"LLY",n:"Eli Lilly",cat:"us",t:"stock",base:815},
- {id:"UNH",n:"UnitedHealth",cat:"us",t:"stock",base:302},{id:"T",n:"AT&T",cat:"us",t:"stock",base:27},
- {id:"VZ",n:"Verizon",cat:"us",t:"stock",base:42},{id:"RBLX",n:"Roblox",cat:"us",t:"stock",base:62,vol:1.8},
+ {id:"JPM",n:"JPMorgan Chase",cat:"us",t:"stock",base:298,div:.021},{id:"V",n:"Visa",cat:"us",t:"stock",base:378},
+ {id:"MA",n:"Mastercard",cat:"us",t:"stock",base:590},{id:"WMT",n:"Walmart",cat:"us",t:"stock",base:104,div:.01},
+ {id:"KO",n:"Coca-Cola",cat:"us",t:"stock",base:72,div:.029},{id:"PEP",n:"PepsiCo",cat:"us",t:"stock",base:154,div:.033},
+ {id:"MCD",n:"McDonald's",cat:"us",t:"stock",base:302,div:.022},{id:"NKE",n:"Nike",cat:"us",t:"stock",base:78},
+ {id:"SBUX",n:"Starbucks",cat:"us",t:"stock",base:94,div:.025},{id:"BA",n:"Boeing",cat:"us",t:"stock",base:212},
+ {id:"GE",n:"GE Aerospace",cat:"us",t:"stock",base:252},{id:"F",n:"Ford",cat:"us",t:"stock",base:11,div:.055},
+ {id:"GM",n:"General Motors",cat:"us",t:"stock",base:53,div:.011},{id:"XOM",n:"Exxon Mobil",cat:"us",t:"stock",base:112,div:.033},
+ {id:"CVX",n:"Chevron",cat:"us",t:"stock",base:152,div:.04},{id:"JNJ",n:"Johnson & Johnson",cat:"us",t:"stock",base:156,div:.03},
+ {id:"PFE",n:"Pfizer",cat:"us",t:"stock",base:26,div:.065},{id:"LLY",n:"Eli Lilly",cat:"us",t:"stock",base:815},
+ {id:"UNH",n:"UnitedHealth",cat:"us",t:"stock",base:302,div:.016},{id:"T",n:"AT&T",cat:"us",t:"stock",base:27,div:.049},
+ {id:"VZ",n:"Verizon",cat:"us",t:"stock",base:42,div:.063},{id:"RBLX",n:"Roblox",cat:"us",t:"stock",base:62,vol:1.8},
  {id:"DKNG",n:"DraftKings",cat:"us",t:"stock",base:42,vol:1.9},{id:"RIVN",n:"Rivian",cat:"us",t:"stock",base:12,vol:2.4},
  {id:"NIO",n:"NIO",cat:"us",t:"stock",base:4.2,vol:2.6},{id:"GME",n:"GameStop",cat:"us",t:"stock",base:24,vol:3},
  {id:"AMC",n:"AMC",cat:"us",t:"stock",base:3.1,vol:3},
  // ---- Canada (NYSE listings so the free feed covers them) ----
- {id:"SHOP",n:"Shopify",cat:"ca",t:"stock",base:118,vol:1.8},{id:"RY",n:"Royal Bank of Canada",cat:"ca",t:"stock",base:129},
- {id:"TD",n:"TD Bank",cat:"ca",t:"stock",base:74},{id:"BMO",n:"Bank of Montreal",cat:"ca",t:"stock",base:104},
- {id:"BNS",n:"Scotiabank",cat:"ca",t:"stock",base:58},{id:"CM",n:"CIBC",cat:"ca",t:"stock",base:68},
- {id:"MFC",n:"Manulife",cat:"ca",t:"stock",base:32},{id:"SLF",n:"Sun Life",cat:"ca",t:"stock",base:62},
- {id:"ENB",n:"Enbridge",cat:"ca",t:"stock",base:45},{id:"TRP",n:"TC Energy",cat:"ca",t:"stock",base:52},
- {id:"SU",n:"Suncor Energy",cat:"ca",t:"stock",base:41},{id:"CNQ",n:"Canadian Natural Res.",cat:"ca",t:"stock",base:34},
- {id:"IMO",n:"Imperial Oil",cat:"ca",t:"stock",base:79},{id:"CVE",n:"Cenovus Energy",cat:"ca",t:"stock",base:17},
- {id:"CP",n:"CPKC Railway",cat:"ca",t:"stock",base:81},{id:"CNI",n:"CN Railway",cat:"ca",t:"stock",base:108},
- {id:"BCE",n:"BCE / Bell Canada",cat:"ca",t:"stock",base:25},{id:"TRI",n:"Thomson Reuters",cat:"ca",t:"stock",base:201},
- {id:"QSR",n:"Restaurant Brands (Tim Hortons)",cat:"ca",t:"stock",base:68},{id:"MG",n:"Magna Intl",cat:"ca",t:"stock",base:44},
+ {id:"SHOP",n:"Shopify",cat:"ca",t:"stock",base:118,vol:1.8},{id:"RY",n:"Royal Bank of Canada",cat:"ca",t:"stock",base:129,div:.033},
+ {id:"TD",n:"TD Bank",cat:"ca",t:"stock",base:74,div:.043},{id:"BMO",n:"Bank of Montreal",cat:"ca",t:"stock",base:104,div:.042},
+ {id:"BNS",n:"Scotiabank",cat:"ca",t:"stock",base:58,div:.054},{id:"CM",n:"CIBC",cat:"ca",t:"stock",base:68,div:.04},
+ {id:"MFC",n:"Manulife",cat:"ca",t:"stock",base:32,div:.04},{id:"SLF",n:"Sun Life",cat:"ca",t:"stock",base:62,div:.039},
+ {id:"ENB",n:"Enbridge",cat:"ca",t:"stock",base:45,div:.06},{id:"TRP",n:"TC Energy",cat:"ca",t:"stock",base:52,div:.05},
+ {id:"SU",n:"Suncor Energy",cat:"ca",t:"stock",base:41,div:.041},{id:"CNQ",n:"Canadian Natural Res.",cat:"ca",t:"stock",base:34,div:.043},
+ {id:"IMO",n:"Imperial Oil",cat:"ca",t:"stock",base:79,div:.026},{id:"CVE",n:"Cenovus Energy",cat:"ca",t:"stock",base:17,div:.034},
+ {id:"CP",n:"CPKC Railway",cat:"ca",t:"stock",base:81},{id:"CNI",n:"CN Railway",cat:"ca",t:"stock",base:108,div:.02},
+ {id:"BCE",n:"BCE / Bell Canada",cat:"ca",t:"stock",base:25,div:.08},{id:"TRI",n:"Thomson Reuters",cat:"ca",t:"stock",base:201,div:.013},
+ {id:"QSR",n:"Restaurant Brands (Tim Hortons)",cat:"ca",t:"stock",base:68,div:.035},{id:"MG",n:"Magna Intl",cat:"ca",t:"stock",base:44,div:.03},
  {id:"OTEX",n:"OpenText",cat:"ca",t:"stock",base:30},{id:"BB",n:"BlackBerry",cat:"ca",t:"stock",base:4.1,vol:2.2},
  {id:"CCJ",n:"Cameco",cat:"ca",t:"stock",base:62,vol:1.7},{id:"AEM",n:"Agnico Eagle Mines",cat:"ca",t:"stock",base:145},
  {id:"WPM",n:"Wheaton Precious Metals",cat:"ca",t:"stock",base:92},{id:"TECK",n:"Teck Resources",cat:"ca",t:"stock",base:42},
@@ -415,7 +416,7 @@ const ASSETS=[
  {id:"BRETT",n:"Brett",cat:"meme",t:"crypto",gecko:"based-brett",base:.09,vol:5},
  {id:"TURBO",n:"Turbo",cat:"meme",t:"crypto",gecko:"turbo",base:.005,vol:5},
 ];
-const CATS=[["all","All"],["us","🇺🇸 US"],["ca","🇨🇦 Canada"],["crypto","Crypto"],["meme","Meme"],["custom","➕ My picks"],["owned","Owned"]];
+const CATS=[["all","All"],["us","🇺🇸 US"],["ca","🇨🇦 Canada"],["crypto","Crypto"],["meme","Meme"],["custom","➕ My picks"],["owned","Owned"],["watch","★ Watching"]];
 
 /* ================= STORAGE ADAPTER ================= */
 const store={
@@ -606,7 +607,8 @@ function defaultState(bal){return{
   bots:{crypto:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0},
         stock:{active:false,strategy:null,cash:0,start:0,holdings:{},log:[],lastAct:0}},
   orders:[],reserved:0,ach:{},custom:[],created:Date.now(),streak:{count:0,lastDay:null},leaderboardOptIn:false,
-  missions:{},flags:{},notifPrefs:{alerts:true,duels:true,recap:true}
+  missions:{},flags:{},notifPrefs:{alerts:true,duels:true,recap:true},
+  watchlist:[],recurring:[],lastDivQuarter:currentQuarterKey()
 }}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,800)}
 function saveNow(){if(S&&profiles.active)store.set("ppt-state:"+profiles.active,S);if(sb&&cloudUser)pushCloud()}
@@ -729,14 +731,24 @@ function assetList(){
   const q=($("q").value||"").toLowerCase();
   return ASSETS.filter(a=>{
     if(curCat==="owned"){const h=S.holdings[a.id];if(!h||h.qty<=1e-9)return false}
+    else if(curCat==="watch"){if(!S.watchlist.includes(a.id))return false}
     else if(curCat!=="all"&&a.cat!==curCat)return false;
     return !q||a.id.toLowerCase().includes(q)||a.n.toLowerCase().includes(q);
   });
 }
+function toggleWatch(id,ev){
+  if(ev)ev.stopPropagation();
+  const i=S.watchlist.indexOf(id);
+  if(i>=0)S.watchlist.splice(i,1);else S.watchlist.push(id);
+  scheduleSave();renderMarkets();
+  if($("sheet").classList.contains("show")&&sheetAsset&&sheetAsset.id===id)drawSheet();
+}
 function rowHTML(a){
-  const p=prices[a.id],c=chg24[a.id],h=S.holdings[a.id];
+  const p=prices[a.id],c=chg24[a.id],h=S.holdings[a.id],watching=S.watchlist.includes(a.id);
   const own=h&&h.qty>1e-9?`<div class="hold-qty">Own ${fmtQty(h.qty)} · ${fmt(h.qty*p)}</div>`:"";
   return `<div class="row" onclick="openTrade('${a.id}')">
+    <button onclick="toggleWatch('${a.id}',event)" aria-label="${watching?"Remove from watchlist":"Add to watchlist"}"
+      style="font-size:16px;flex-shrink:0;color:${watching?"#F5A623":"var(--gray-3)"}">★</button>
     ${badgeHTML(a.id,a.t==="crypto")}
     <div class="row-mid"><div class="row-name">${a.n}</div><div class="row-sub">${a.id} · ${a.cat==="ca"?"🇨🇦 ":""}${a.t==="crypto"?"Crypto":a.cat==="ca"?"Canada · NYSE":"US stock"}</div>${own}</div>
     <div class="row-right"><div class="row-price" id="p-${a.id}">${fmt(p)}</div>
@@ -774,7 +786,7 @@ function renderTape(){
 let sheetAsset=null,sheetSide="buy",sheetMode="cad"; // cad = dollar amount, qty = units
 function openTrade(id){
   sheetAsset=ASSETS.find(a=>a.id===id);sheetSide="buy";sheetMode="cad";orderType="market";curTF="live";
-  alertFormOpen=false;
+  alertFormOpen=false;recurForm=false;
   drawSheet();$("overlay").classList.add("show");$("sheet").classList.add("show");
 }
 function closeSheet(){$("overlay").classList.remove("show");$("sheet").classList.remove("show")}
@@ -862,11 +874,14 @@ function drawSheet(){
      ${badgeHTML(a.id,a.t==="crypto")}
      <div style="flex:1"><div style="font-weight:700;font-size:17px">${a.n}</div>
        <div style="font-size:12px;color:var(--gray-4)">${a.id} · ${a.t==="crypto"?"Crypto":"Stock"}</div></div>
+     <button class="iconbtn" style="width:40px;height:40px;font-size:18px;color:${S.watchlist.includes(a.id)?"#F5A623":"inherit"}" onclick="toggleWatch('${a.id}')" aria-label="Toggle watchlist" title="Toggle watchlist">★</button>
      <button class="iconbtn" style="width:40px;height:40px;font-size:17px" onclick="toggleAlertForm()" aria-label="Set a price alert" title="Set a price alert">🔔</button>
+     <button class="iconbtn" style="width:40px;height:40px;font-size:17px" onclick="toggleRecurForm()" aria-label="Set up recurring buy" title="Set up recurring buy">🔁</button>
      <div style="text-align:right"><div style="font-family:var(--mono);font-weight:700;font-size:18px">${fmt(p)}</div>
        <div class="row-chg ${chg24[a.id]>=0?"pos":"neg"}">${chg24[a.id]>=0?"+":""}${chg24[a.id].toFixed(2)}% today</div></div>
    </div>
    ${alertFormOpen?alertFormHTML(a,p):""}
+   ${recurForm?recurFormHTML(a,p):""}
    ${spark}
    ${h.qty>1e-9?`<div class="card" style="margin:10px 0 0;padding:12px 16px;display:flex;justify-content:space-between;font-size:13px">
      <span>You own <b style="font-family:var(--mono)">${fmtQty(h.qty)}</b></span>
@@ -925,12 +940,24 @@ function amtChanged(){
   if(v>0)$("doBtn").textContent=`${sheetSide==="buy"?"Buy":"Sell"} ${fmtQty(v/p)} ${sheetAsset.id}`;
   else $("doBtn").textContent=`${sheetSide==="buy"?"Buy":"Sell"} ${sheetAsset.id}`;
 }
+function coachNote(a,val){
+  const h=hist[a.id];
+  if(h.length<8)return null;
+  const window=h.slice(-20),recentMax=Math.max(...window),recentMin=Math.min(...window),p=prices[a.id];
+  const share=val/(youValue()||val);
+  if(p>=recentMax*0.995)return"📈 That's near a recent high — chasing a price that's already run up is a common way to buy the top.";
+  if(p<=recentMin*1.01)return"🎯 That's near a recent low — buying weakness instead of chasing strength, textbook \"buy the dip.\"";
+  if(share>=0.3)return"⚠️ That's a big chunk of your portfolio in one asset — concentration cuts both ways, up and down.";
+  return null;
+}
 function execute(){
   const v=parseFloat($("amt").value)||0,a=sheetAsset,p=prices[a.id];
   if(orderType!=="market")return placeOrder(v);
   const qty=v/p;
+  let coach=null;
   if(sheetSide==="buy"){
     if(v>S.cash)return;
+    coach=coachNote(a,v);
     S.cash-=v;
     const h=S.holdings[a.id]||(S.holdings[a.id]={qty:0,cost:0});
     h.qty+=qty;h.cost+=v;
@@ -945,7 +972,7 @@ function execute(){
     if(h.qty<1e-9)delete S.holdings[a.id];
   }
   S.trades.unshift({t:Date.now(),side:sheetSide,id:a.id,qty,price:p,val:v,who:"you",
-    ...(sheetSide==="sell"?{pl:sellPL}:{})});
+    ...(sheetSide==="sell"?{pl:sellPL}:{}),...(coach?{coach}:{})});
   if(S.trades.length>300)S.trades.pop();
   unlock("first_trade");bumpStreak();
   if(sheetSide==="buy"){
@@ -1186,6 +1213,173 @@ async function renderBenchmark(){
   }
 }
 
+/* ================= CSV EXPORT ================= */
+function exportTradesCSV(){
+  if(!S.trades.length)return toast("No trade history to export yet");
+  const rows=[["Date","Side","Asset","Qty","Price","Value","Who","P&L","Note"]];
+  S.trades.forEach(t=>rows.push([new Date(t.t).toISOString(),t.side,t.id,t.qty??"",t.price??"",t.val,
+    t.who==="you"?"you":t.who,t.pl??"",t.note??""]));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="papertrade-trades.csv";a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast("CSV downloaded");
+}
+
+/* ================= "WHAT IF" HISTORICAL CALCULATOR ================= */
+let whatIfAsset="BTC";
+function openWhatIf(){
+  const maxDate=new Date().toISOString().slice(0,10);
+  const minDate=new Date(Date.now()-364*86400000).toISOString().slice(0,10);
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">📆 "What if" calculator</h2>
+   <p style="font-size:13px;color:var(--gray-4);margin-bottom:12px;line-height:1.5">See what a past investment would be worth today, using real historical prices. Crypto only — the free tier's stock history isn't reliable enough.</p>
+   <div class="chips" style="padding:2px 0 10px">${["BTC","ETH","SOL","XRP","DOGE"].map(id=>
+     `<button class="chip ${whatIfAsset===id?"on":""}" onclick="whatIfAsset='${id}';openWhatIf()">${id}</button>`).join("")}</div>
+   <div class="budget-box" style="margin:0 0 12px">
+     <div class="label" style="margin-bottom:6px">Amount invested</div>
+     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+       <span style="font-family:var(--mono);font-size:20px;font-weight:700">$</span>
+       <input id="wiAmt" inputmode="decimal" value="500" style="font-family:var(--mono);font-size:20px;font-weight:700;flex:1;background:none">
+     </div>
+     <div class="label" style="margin-bottom:6px">On this date</div>
+     <input id="wiDate" type="date" min="${minDate}" max="${maxDate}" value="${minDate}"
+       style="width:100%;background:var(--gray-1);border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:14px">
+   </div>
+   <button class="cta" style="padding:13px" onclick="calcWhatIf()">Calculate</button>
+   <div id="wiResult" style="margin-top:12px"></div>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+async function calcWhatIf(){
+  const amt=parseFloat($("wiAmt").value),dateStr=$("wiDate").value;
+  if(!amt||amt<=0)return toast("Enter a valid amount");
+  if(!dateStr)return toast("Pick a date");
+  const box=$("wiResult");
+  box.innerHTML=`<div class="empty" style="padding:14px">Fetching historical price…</div>`;
+  const a=ASSETS.find(x=>x.id===whatIfAsset);
+  const[yyyy,mm,dd]=dateStr.split("-");
+  try{
+    const r=await fetch(`https://api.coingecko.com/api/v3/coins/${a.gecko}/history?date=${dd}-${mm}-${yyyy}`);
+    const j=await r.json();
+    const then=j&&j.market_data&&j.market_data.current_price&&j.market_data.current_price.usd;
+    const now=prices[whatIfAsset];
+    if(!then||!now)throw 0;
+    if(!$("wiResult"))return;
+    const worth=amt*now/then,pl=worth-amt,plp=pl/amt*100,up=pl>=0;
+    $("wiResult").innerHTML=`<div class="card dark" style="text-align:center;padding:20px">
+      <div class="label">${fmt(amt)} of ${whatIfAsset} on ${new Date(dateStr).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})} would be worth</div>
+      <div class="bignum" style="font-size:34px;margin-top:6px">${fmt(worth)}</div>
+      <div class="subnum ${up?"pos":"neg"}" style="font-size:14px">${up?"+":"−"}${fmt(Math.abs(pl))} (${up?"+":""}${plp.toFixed(2)}%)</div>
+    </div>
+    <p style="font-size:11px;color:var(--gray-4);margin-top:10px;text-align:center;line-height:1.5">Based on real historical CoinGecko prices — hindsight is easy, timing it live never is.</p>`;
+  }catch(e){
+    if($("wiResult"))$("wiResult").innerHTML=`<div class="empty" style="padding:14px">Couldn't fetch that date's price — try a different date.</div>`;
+  }
+}
+
+/* ================= RECURRING BUYS (DCA) ================= */
+// Schedules ride inside the state blob (like bots/orders) so they sync via
+// the same push/pull, and bot-tick executes them server-side too -- same
+// "keeps running with the app closed" guarantee as bots and price alerts.
+let recurForm=false,recurFreq="weekly";
+function toggleRecurForm(){recurForm=!recurForm;drawSheet()}
+function recurFormHTML(a,p){
+  return`<div class="budget-box" style="margin-top:10px">
+    <div class="label" style="margin-bottom:8px">Auto-buy ${a.id} on a schedule</div>
+    <div class="seg" style="margin:0 0 10px">
+      <button class="${recurFreq==="weekly"?"on":""}" onclick="recurFreq='weekly';drawSheet()">Weekly</button>
+      <button class="${recurFreq==="monthly"?"on":""}" onclick="recurFreq='monthly';drawSheet()">Monthly</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-family:var(--mono);font-size:20px;font-weight:700">$</span>
+      <input id="recurAmt" inputmode="decimal" value="25" style="font-family:var(--mono);font-size:20px;font-weight:700;flex:1;background:none">
+    </div>
+    <button class="cta" style="margin-top:12px;padding:12px" onclick="createRecurring('${a.id}','${a.t}','${a.gecko||""}')">Start auto-buy</button>
+  </div>`;
+}
+function createRecurring(id,type,gecko){
+  const amount=parseFloat($("recurAmt").value);
+  if(!amount||amount<=0)return toast("Enter a valid amount");
+  const everyDays=recurFreq==="weekly"?7:30;
+  S.recurring.push({rid:Date.now()+Math.random(),assetId:id,assetType:type,gecko:gecko||null,
+    amount,everyDays,nextRun:Date.now()+everyDays*86400000,created:Date.now()});
+  unlock("auto_investor");scheduleSave();
+  toast(`🔁 Auto-buying ${fmt(amount)} of ${id} ${recurFreq}`);
+  recurForm=false;drawSheet();
+}
+function cancelRecurring(rid){
+  S.recurring=S.recurring.filter(r=>r.rid!==rid);
+  scheduleSave();openMyRecurring();
+}
+function openMyRecurring(){
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🔁 Recurring buys</h2>
+   <p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Tap the 🔁 button on any asset's page to start one. Runs even with the app closed once you're signed in.</p>
+   ${S.recurring.length?S.recurring.map(r=>`<div class="row" style="cursor:default">
+      ${badgeHTML(r.assetId,r.assetType==="crypto")}
+      <div class="row-mid"><div class="row-name">${r.assetId}</div>
+        <div class="row-sub">${fmt(r.amount)} every ${r.everyDays===7?"week":"month"}</div></div>
+      <button class="chip" style="padding:6px 12px" onclick="cancelRecurring(${r.rid})">Cancel</button></div>`).join("")
+    :`<div class="empty" style="padding:18px">No recurring buys yet.</div>`}`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+}
+function checkRecurring(){
+  if(!S||!S.recurring||!S.recurring.length)return;
+  const now=Date.now();let any=false;
+  S.recurring.forEach(r=>{
+    if(r.assetType==="stock"&&!marketOpen())return; // wait for the next open tick, same as bots
+    let runs=0;
+    while(r.nextRun<=now&&runs<5){ // cap catch-up so a long-closed app doesn't fire hundreds at once
+      const p=prices[r.assetId];
+      if(p){
+        const amt=Math.min(r.amount,S.cash);
+        if(amt>=1){
+          const qty=amt/p;
+          S.cash-=amt;
+          const h=S.holdings[r.assetId]||(S.holdings[r.assetId]={qty:0,cost:0});
+          h.qty+=qty;h.cost+=amt;
+          S.trades.unshift({t:Date.now(),side:"buy",id:r.assetId,qty,price:p,val:amt,who:"you",note:"auto"});
+          if(S.trades.length>300)S.trades.pop();
+          bumpStreak();any=true;
+        }
+      }
+      r.nextRun+=r.everyDays*86400000;runs++;
+    }
+  });
+  if(any){scheduleSave();renderMarkets();
+    if($("scr-portfolio").classList.contains("active"))renderPortfolio();
+    if($("scr-activity").classList.contains("active"))renderActivity();}
+}
+
+/* ================= DIVIDENDS ================= */
+// Real dividend timing/amounts vary per company; this approximates it as one
+// flat payout per calendar quarter (yield/4 of position value at payout time)
+// for assets carrying a static `div` (annual yield) field -- close enough for
+// the lesson ("dividend stocks pay you just for holding") without needing a
+// real per-symbol dividend calendar.
+function currentQuarterKey(){const d=new Date();return d.getFullYear()+"-Q"+(Math.floor(d.getMonth()/3)+1)}
+function checkDividends(){
+  if(!S)return;
+  const key=currentQuarterKey();
+  if(S.lastDivQuarter===key)return;
+  S.lastDivQuarter=key;
+  let total=0;const paid=[];
+  for(const id in S.holdings){
+    const a=ASSETS.find(x=>x.id===id);
+    if(!a||!a.div)continue;
+    const h=S.holdings[id],amt=h.qty*prices[id]*(a.div/4);
+    if(amt<0.01)continue;
+    total+=amt;paid.push({id,amt});
+  }
+  if(!total){scheduleSave();return}
+  S.cash+=total;
+  S.trades.unshift({t:Date.now(),side:"dividend",id:paid.length===1?paid[0].id:paid.length+" stocks",val:total,who:"you"});
+  if(S.trades.length>300)S.trades.pop();
+  unlock("dividend_collector");
+  scheduleSave();
+  toast(`💵 Dividends paid: +${fmt(total)}`);
+  if($("scr-portfolio").classList.contains("active"))renderPortfolio();
+  if($("scr-activity").classList.contains("active"))renderActivity();
+}
+
 /* ================= ACTIVITY ================= */
 const ACT_FILTERS=[["all","All"],["buy","Buys"],["sell","Sells"],["you","You"],["bot","Bots"]];
 let actFilter="all";
@@ -1215,11 +1409,13 @@ function renderActivity(){
     if(label!==lastLabel){html+=`<div class="label" style="margin:${lastLabel?"16px":"0"} 0 8px 4px">${label}</div>`;lastLabel=label}
     const a=ASSETS.find(x=>x.id===tr.id),crypto=a&&a.t==="crypto",d=new Date(tr.t);
     const who=tr.who==="bot-crypto"?"🤖 Crypto Bot":tr.who==="bot-stock"?"🤖 Stock Bot":tr.who==="bot"?"🤖 Bot":"";
+    const isDiv=tr.side==="dividend";
     html+=`<div class="row" style="cursor:default">
-      ${badgeHTML(tr.id,crypto)}
+      ${isDiv?`<div class="badge" style="background:rgba(142,92,217,.14);color:#8E5CD9">💵</div>`:badgeHTML(tr.id,crypto)}
       <div class="row-mid">
         <div class="row-name"><span class="tag ${tr.side}">${tr.side.toUpperCase()}</span>${tr.id}${tr.note?` <span class="pill" style="font-size:9px;padding:2px 6px">${tr.note.toUpperCase()}</span>`:""}</div>
-        <div class="row-sub">${fmtQty(tr.qty)} @ ${fmt(tr.price)}${who?" · "+who:""}</div>
+        <div class="row-sub">${isDiv?"Dividend payout":`${fmtQty(tr.qty)} @ ${fmt(tr.price)}`}${who?" · "+who:""}</div>
+        ${tr.coach?`<div class="why" style="margin-top:2px">${tr.coach}</div>`:""}
       </div>
       <div class="row-right">
         <div class="row-price">${fmt(tr.val)}</div>
@@ -1259,8 +1455,12 @@ function openSettings(){
    <button class="settings-row" style="width:100%;text-align:left" onclick="openMissions()"><span>🎯 Missions</span><b>›</b></button>
    <button class="settings-row" style="width:100%;text-align:left" onclick="openTimeMachine()"><span>🕰 Time Machine</span><b>›</b></button>
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openMyAlerts()"><span>🔔 My price alerts</span><b>›</b></button>`:""}
+   <button class="settings-row" style="width:100%;text-align:left" onclick="openMyRecurring()"><span>🔁 Recurring buys</span><b>›</b></button>
+   <button class="settings-row" style="width:100%;text-align:left" onclick="openWhatIf()"><span>📆 "What if" calculator</span><b>›</b></button>
+   <button class="settings-row" style="width:100%;text-align:left" onclick="exportTradesCSV()"><span>⬇️ Export trade history (CSV)</span><b>›</b></button>
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openInviteSheet()"><span>🎁 Invite a friend</span><b>›</b></button>`:""}
    ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openPublicProfileSheet()"><span>🔗 My public profile</span><b>›</b></button>`:""}
+   ${cloudUser?`<button class="settings-row" style="width:100%;text-align:left" onclick="openLeagues()"><span>🏟️ Private leagues</span><b>›</b></button>`:""}
    <div class="settings-row" style="display:block">
      <div style="margin-bottom:8px"><b>🏅 Badges</b> <span style="color:var(--gray-4);font-size:12px">${Object.keys(S.ach||{}).length}/${ACH.length}</span></div>
      <div style="display:flex;flex-wrap:wrap;gap:6px">${ACH.map(([id,ic,name])=>
@@ -1640,7 +1840,9 @@ const ACH=[
  ["streak_3","🔥","On a Roll","Traded 3 days in a row"],
  ["streak_7","🔥","Week Warrior","Traded 7 days in a row"],
  ["streak_30","🔥","Unstoppable","Traded 30 days in a row"],
- ["time_traveler","🕰","Time Traveler","Completed a Time Machine replay"]];
+ ["time_traveler","🕰","Time Traveler","Completed a Time Machine replay"],
+ ["dividend_collector","💵","Dividend Collector","Received your first dividend payout"],
+ ["auto_investor","🔁","Auto-Investor","Set up a recurring buy"]];
 function unlock(id){
   if(!S||!S.ach||S.ach[id])return;
   S.ach[id]=Date.now();scheduleSave();
@@ -2035,6 +2237,9 @@ function migrateState(){
   if(!S.notifPrefs)S.notifPrefs={alerts:true,duels:true,recap:true};
   if(!S.streak)S.streak={count:0,lastDay:null};
   if(S.leaderboardOptIn===undefined)S.leaderboardOptIn=false;
+  if(!S.watchlist)S.watchlist=[];
+  if(!S.recurring)S.recurring=[];
+  if(!S.lastDivQuarter)S.lastDivQuarter=currentQuarterKey(); // don't backdate-pay quarters that started before this feature existed
   S.custom.forEach(a=>{if(!ASSETS.some(x=>x.id===a.id))registerAsset(a)});
 }
 const REFERRAL_BONUS=500;
@@ -2071,6 +2276,7 @@ function newProfile(){
 }
 function refreshAll(){
   Object.keys(lastShown).forEach(k=>delete lastShown[k]);
+  checkDividends();checkRecurring();
   renderMarkets();renderTape();updateFeedPill();updateMktPill();
   const active=document.querySelector(".screen.active").id.replace("scr-","");
   if(active==="portfolio")renderPortfolio();
@@ -2155,20 +2361,30 @@ async function renderDeviceLeaderboard(){
      <div class="row-right"><div class="row-chg ${r.r>=0?"pos":"neg"}" style="font-size:15px">${r.r>=0?"+":""}${r.r.toFixed(2)}%</div></div></div>`).join("")}
    ${rows.length<2?`<div class="empty" style="padding:18px">Add more profiles in ⚙ Settings to start a competition — great for challenging friends or family on one phone.</div>`:""}`;
 }
+let lbScope="season";
+function setLbScope(s){lbScope=s;renderGlobalLeaderboard()}
 async function renderGlobalLeaderboard(){
   if(!$("lbBody"))return;
   if(!sb){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Cloud sync isn't available right now.</div>`;return}
   let data=null;
-  try{const r=await sb.from("leaderboard_public").select("*").order("leaderboard_return_pct",{ascending:false}).limit(50);data=r.data}catch(e){}
+  try{const r=await sb.from("leaderboard_public").select("*").order("leaderboard_return_pct",{ascending:false}).limit(100);data=r.data}catch(e){}
   if(!$("lbBody"))return;
   if(!data){$("lbBody").innerHTML=`<div class="empty" style="padding:18px">Couldn't load the global leaderboard right now.</div>`;return}
+  const rows=data.map(r=>({...r,seasonPct:(r.leaderboard_return_pct||0)-(r.season_start_pct||0)}));
+  if(lbScope==="season")rows.sort((a,b)=>b.seasonPct-a.seasonPct);
+  const shown=rows.slice(0,50);
   const medals=["🥇","🥈","🥉"];
-  $("lbBody").innerHTML=`<p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">Real traders who've opted in, ranked by all-time return.</p>
-   ${data.length?data.map((r,i)=>{const me=cloudUser&&r.id===cloudUser.id;
+  const seasonLabel=new Date().toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  $("lbBody").innerHTML=`<div class="seg" style="margin:0 0 8px">
+     <button class="${lbScope==="season"?"on":""}" onclick="setLbScope('season')">This season</button>
+     <button class="${lbScope==="alltime"?"on":""}" onclick="setLbScope('alltime')">All-time</button>
+   </div>
+   <p style="font-size:12px;color:var(--gray-4);margin-bottom:10px">${lbScope==="season"?`Ranked by return since the ${seasonLabel} season started — fresh monthly, so new traders aren't buried under a head start.`:"Ranked by all-time return since each trader's account started."}</p>
+   ${shown.length?shown.map((r,i)=>{const me=cloudUser&&r.id===cloudUser.id,pct=lbScope==="season"?r.seasonPct:(r.leaderboard_return_pct||0);
      return`<div class="row" style="cursor:default;${me?"border-color:var(--ink)":""}">
        <div style="font-size:20px;width:32px;text-align:center">${medals[i]||(i+1)}</div>
        <div class="row-mid"><div class="row-name">${esc(r.display_name)}${me?" (you)":""}</div></div>
-       <div class="row-right"><div class="row-chg ${(r.leaderboard_return_pct||0)>=0?"pos":"neg"}" style="font-size:15px">${(r.leaderboard_return_pct||0)>=0?"+":""}${(r.leaderboard_return_pct||0).toFixed(2)}%</div></div></div>`}).join("")
+       <div class="row-right"><div class="row-chg ${pct>=0?"pos":"neg"}" style="font-size:15px">${pct>=0?"+":""}${pct.toFixed(2)}%</div></div></div>`}).join("")
      :`<div class="empty" style="padding:18px">No one's opted in yet — be the first! Turn it on in ⚙ Settings → Cloud Sync.</div>`}`;
 }
 
@@ -2225,6 +2441,98 @@ async function claimPendingChallenge(){
   }catch(e){}
   localStorage.removeItem("ppt-pending-challenge");
 }
+/* ================= PRIVATE LEAGUES ================= */
+// Invite-code group leaderboards, separate from the global one -- a friend
+// group or classroom where the ranking isn't drowned out by strangers.
+// No cross-user Edge Function needed for create/join (RLS lets you insert
+// your own membership row directly); a scoped ranking still needs one
+// (league-leaderboard) since RLS can't let you read *other* people's
+// leaderboard_return_pct off their profiles row directly.
+function genLeagueCode(){
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";
+  for(let i=0;i<6;i++)s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+async function openLeagues(){
+  if(!sb||!cloudUser){$("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:8px">🏟️ Private leagues</h2>
+    <div class="empty" style="padding:18px">Sign in under ⚙ Settings → Cloud Sync to create or join a league.</div>`;
+    $("overlay").classList.add("show");$("sheet").classList.add("show");return}
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🏟️ Private leagues</h2>
+   <p style="font-size:12px;color:var(--gray-4);margin-bottom:12px">A leaderboard just for your friends, family, or class — invite-code only.</p>
+   <div style="display:flex;gap:8px;margin-bottom:14px">
+     <button class="cta" style="flex:1;padding:12px;font-size:14px" onclick="createLeague()">＋ Create</button>
+     <button class="cta sell" style="flex:1;padding:12px;font-size:14px" onclick="promptJoinLeague()">Join with code</button>
+   </div>
+   <div id="leaguesList"><div class="empty" style="padding:14px">Loading…</div></div>`;
+  $("overlay").classList.add("show");$("sheet").classList.add("show");
+  loadMyLeagues();
+}
+async function loadMyLeagues(){
+  let rows=[];
+  try{const{data}=await sb.from("league_members").select("league_id, leagues(name,code)").eq("user_id",cloudUser.id);rows=data||[]}catch(e){}
+  if(!$("leaguesList"))return;
+  $("leaguesList").innerHTML=rows.length?rows.map(r=>`<div class="row" style="cursor:pointer" onclick="viewLeague('${r.league_id}','${esc((r.leagues&&r.leagues.name)||"League").replace(/'/g,"&#39;")}')">
+      <div class="badge">🏟️</div>
+      <div class="row-mid"><div class="row-name">${esc((r.leagues&&r.leagues.name)||"League")}</div>
+        <div class="row-sub">Code: ${(r.leagues&&r.leagues.code)||"?"}</div></div>
+      <b style="color:var(--gray-3)">›</b></div>`).join("")
+    :`<div class="empty" style="padding:14px">You're not in any leagues yet — create one or join with a code.</div>`;
+}
+async function createLeague(){
+  const name=prompt("Name your league (e.g. \"Smith Family\", \"Room 214\"):");
+  if(!name||!name.trim())return;
+  for(let attempt=0;attempt<4;attempt++){
+    const code=genLeagueCode();
+    try{
+      const{data,error}=await sb.from("leagues").insert({name:name.trim().slice(0,40),code,creator:cloudUser.id}).select().single();
+      if(error){if((error.message||"").includes("duplicate"))continue;throw error}
+      await sb.from("league_members").insert({league_id:data.id,user_id:cloudUser.id,display_name:profiles.active||"Trader"});
+      toast(`🏟️ League created — code ${code}`);
+      loadMyLeagues();return;
+    }catch(e){toast("Couldn't create the league — try again");return}
+  }
+  toast("Couldn't generate a unique code — try again");
+}
+function promptJoinLeague(){
+  const code=prompt("Enter the 6-character league code:");
+  if(!code||!code.trim())return;
+  joinLeague(code.trim().toUpperCase());
+}
+async function joinLeague(code){
+  try{
+    const{data:league}=await sb.from("leagues").select("id,name").eq("code",code).maybeSingle();
+    if(!league)return toast("No league found with that code");
+    const{error}=await sb.from("league_members").insert({league_id:league.id,user_id:cloudUser.id,display_name:profiles.active||"Trader"});
+    if(error&&!(error.message||"").includes("duplicate"))throw error;
+    toast(`🏟️ Joined ${league.name}`);
+    loadMyLeagues();
+  }catch(e){toast("Couldn't join that league — try again")}
+}
+async function viewLeague(leagueId,name){
+  $("sheet").innerHTML=`<div class="grab"></div><h2 style="font-size:20px;margin-bottom:4px">🏟️ ${esc(name)}</h2>
+   <div id="leagueBoard"><div class="empty" style="padding:18px">Loading…</div></div>
+   <button class="cta sell" style="padding:12px;margin-top:10px" onclick="leaveLeague('${leagueId}')">Leave league</button>`;
+  let rows=[];
+  try{
+    const{data,error}=await sb.functions.invoke("league-leaderboard",{body:{league_id:leagueId,user_id:cloudUser.id}});
+    if(error)throw error;
+    rows=(data&&data.rows)||[];
+  }catch(e){}
+  if(!$("leagueBoard"))return;
+  const medals=["🥇","🥈","🥉"];
+  $("leagueBoard").innerHTML=rows.length?rows.map((r,i)=>`<div class="row" style="cursor:default;${r.user_id===cloudUser.id?"border-color:var(--ink)":""}">
+      <div style="font-size:20px;width:32px;text-align:center">${medals[i]||(i+1)}</div>
+      <div class="row-mid"><div class="row-name">${esc(r.display_name)}${r.user_id===cloudUser.id?" (you)":""}</div>
+        <div class="row-sub">🏅 ${r.badges}</div></div>
+      <div class="row-right"><div class="row-chg ${r.return_pct>=0?"pos":"neg"}" style="font-size:15px">${r.return_pct>=0?"+":""}${r.return_pct.toFixed(2)}%</div></div></div>`).join("")
+    :`<div class="empty" style="padding:14px">Couldn't load standings right now.</div>`;
+}
+async function leaveLeague(leagueId){
+  if(!confirm("Leave this league?"))return;
+  try{await sb.from("league_members").delete().eq("league_id",leagueId).eq("user_id",cloudUser.id)}catch(e){}
+  openLeagues();
+}
+
 async function init(){
   buildChips();
   const p=await store.get("ppt-profiles");
@@ -2253,6 +2561,8 @@ function boot(){
   setInterval(()=>{botThink("crypto");botThink("stock")},5000);
   setInterval(()=>{if($("scr-bot")&&$("scr-bot").classList.contains("active")&&S&&((S.bots.crypto&&S.bots.crypto.active)||(S.bots.stock&&S.bots.stock.active)))renderBot()},1000);
   updateMktPill();setInterval(updateMktPill,20000);
+  checkDividends();setInterval(checkDividends,300000);
+  checkRecurring();setInterval(checkRecurring,60000);
 }
 (function captureReferral(){
   const params=new URLSearchParams(location.search);

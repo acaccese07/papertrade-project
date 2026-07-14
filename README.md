@@ -103,6 +103,41 @@ code (Time Machine replays CoinGecko's last-365-days daily data — free-tier
 historical limit is why it's "last 12 months" and not the 2020 crash), and
 per-asset news is a `news` type on stock-proxy (Finnhub company-news).
 
+### Watchlist, dividends, coach notes, CSV export, "what if" calculator
+All pure client-side, no deploy needed. Watchlist is a plain array of asset
+ids (`S.watchlist`). Dividends approximate real payouts as one flat
+yield/4-of-position-value credit per calendar quarter, for assets carrying a
+static `div` (annual yield) field in the `ASSETS` catalog — not a real
+per-symbol dividend calendar. Coach notes are a heuristic one-liner
+(`coachNote()`) attached to a trade when you buy near a recent high/low or
+oversize a position — mirrors the user's own behavior back at them, separate
+from the bots' "why" reasoning. The "what if" calculator and bot backtest
+preview are both crypto-only for the same reason: free-tier stock historical
+data isn't reliable enough.
+
+### Recurring buys (DCA)
+Schedules ride inside the state blob (`S.recurring`) same as bots and
+orders, so they sync via the normal push/pull *and* execute server-side in
+bot-tick (`processRecurring()`) — same "keeps running with the app closed"
+guarantee as bots and price alerts. Deploy after changes: `supabase functions
+deploy bot-tick`.
+
+### Private leagues
+Invite-code group leaderboards, separate from the public one. Unlike
+challenges/referrals, creating/joining doesn't need a service-role Edge
+Function — RLS lets you insert your own `league_members` row directly.
+Reading a league's *standings* does need one (`league-leaderboard`), since
+RLS on `profiles` only ever exposes your own row. Deploy: `supabase
+functions deploy league-leaderboard`.
+
+### Monthly leaderboard seasons
+The global leaderboard defaults to "this season" (return % since the last
+monthly rollover) instead of all-time, so new traders aren't permanently
+buried under accounts with months of head start. Rollover
+(`monthlySeasonReset()`) piggybacks on the existing bot-tick cron, firing
+once at the start of each month; `season_start_pct` on `profiles` holds each
+trader's baseline.
+
 ## Notes for whoever picks this up in Claude Code
 - Live crypto prices: CoinGecko public API, no key needed.
 - Live stock prices: proxied through the `stock-proxy` Supabase Edge Function above.

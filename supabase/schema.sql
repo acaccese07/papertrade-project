@@ -68,6 +68,17 @@ alter table public.profiles add column if not exists leaderboard_bot_configs jso
 alter table public.profiles add column if not exists leaderboard_badges_count int;
 -- per-notification-type opt-outs, read by bot-tick before sending each push
 alter table public.profiles add column if not exists notif_prefs jsonb;
+-- monthly leaderboard seasons: season_start_pct is each trader's all-time
+-- return % snapshotted at the last monthly rollover (or at signup, for a
+-- brand-new account, which defaults to 0 -- see the backfill below). The
+-- client computes "this season" rank as leaderboard_return_pct minus this,
+-- so a trader who joined mid-month isn't ranked against someone else's
+-- months-old head start.
+alter table public.profiles add column if not exists season_start_pct numeric;
+alter table public.profiles add column if not exists season_start_at timestamptz;
+alter table public.profiles add column if not exists season_label text;
+update public.profiles set season_start_pct=coalesce(leaderboard_return_pct,0),
+  season_start_at=now(), season_label=to_char(now(),'YYYY-MM') where season_start_pct is null;
 
 -- drop+recreate rather than "or replace": postgres refuses to reorder/insert
 -- view columns in place, and column order here isn't worth preserving
@@ -75,13 +86,50 @@ drop view if exists public.leaderboard_public;
 create view public.leaderboard_public as
   select id, display_name, leaderboard_return_pct, leaderboard_value,
          leaderboard_bot_return_pct, leaderboard_bot_label, leaderboard_bot_configs,
-         leaderboard_badges_count, updated_at
+         leaderboard_badges_count, season_start_pct, updated_at
   from public.profiles
   where leaderboard_opt_in = true
   order by leaderboard_return_pct desc nulls last
   limit 100;
 
 grant select on public.leaderboard_public to anon, authenticated;
+
+-- ---------- Private leagues ----------
+-- Invite-code group leaderboards, separate from the public one. Unlike
+-- challenges/referrals, joining doesn't need a service-role Edge Function --
+-- a user can always insert their own membership row under RLS. Reading
+-- *other* members' return % still does (league-leaderboard Edge Function),
+-- since RLS on profiles only ever exposes your own row.
+create table if not exists public.leagues (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  name text not null,
+  creator uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.leagues enable row level security;
+drop policy if exists "read any league" on public.leagues;
+create policy "read any league" on public.leagues for select using (true);
+drop policy if exists "create own league" on public.leagues;
+create policy "create own league" on public.leagues for insert with check (auth.uid() = creator);
+
+create table if not exists public.league_members (
+  league_id uuid not null references public.leagues(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  display_name text not null default 'Trader',
+  joined_at timestamptz not null default now(),
+  primary key (league_id, user_id)
+);
+alter table public.league_members enable row level security;
+drop policy if exists "read own league memberships" on public.league_members;
+create policy "read own league memberships" on public.league_members
+  for select using (auth.uid() = user_id or league_id in (select league_id from public.league_members where user_id = auth.uid()));
+drop policy if exists "join league as self" on public.league_members;
+create policy "join league as self" on public.league_members
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "leave league as self" on public.league_members;
+create policy "leave league as self" on public.league_members
+  for delete using (auth.uid() = user_id);
 
 -- ---------- Head-to-head challenges ----------
 -- A challenge is "same market, 7 days, best return-delta wins". Baselines are
