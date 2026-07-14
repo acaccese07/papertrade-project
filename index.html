@@ -113,6 +113,10 @@ input{font-family:inherit;border:none;outline:none;background:none;color:inherit
   width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--paper);
   font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;
   box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:30}
+#settingsBtn{position:absolute;left:14px;bottom:calc(88px + env(safe-area-inset-bottom));
+  width:48px;height:48px;border-radius:50%;background:var(--paper);color:var(--ink);
+  border:1px solid var(--gray-2);font-size:19px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:30}
 
 /* ---------- sheet ---------- */
 #overlay{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;
@@ -208,7 +212,6 @@ canvas{width:100%;display:block}
         <span class="pill" id="mktPill">NYSE</span>
         <span class="pill" id="feedPill">SIM</span>
         <button class="iconbtn" onclick="openAddSheet()" style="font-size:20px;font-weight:600" aria-label="Add a ticker" title="Add a ticker">+</button>
-        <button class="iconbtn" onclick="openSettings()" aria-label="Settings" title="Settings">&#9881;</button>
       </div>
     </div>
     <div class="search">&#128269;<input id="q" placeholder="Search stocks &amp; crypto" oninput="renderMarkets()"></div>
@@ -272,6 +275,7 @@ canvas{width:100%;display:block}
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Activity</button>
   </div>
 
+  <button id="settingsBtn" onclick="openSettings()" aria-label="Settings" title="Settings">&#9881;</button>
   <button id="helpBtn" onclick="openHelpGuide()" aria-label="Help guide" title="Help guide">?</button>
 
   <div id="overlay" onclick="closeSheet()"></div>
